@@ -1,0 +1,35 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-figtree: 'Figtree', sans-serif;
+  --font-inter: 'Inter', sans-serif;
+
+  --color-brand-background: #E2E2E2;
+  --color-brand-foreground: #000000;
+  --color-brand-accent: #FFFFFF;
+  --color-brand-stroke: #E2E2E2;
+  --color-brand-success: #3AC754;
+
+  --shadow-brand-surface: inset -10px -10px 20px #FAFAFA, inset 10px 10px 20px #D3D3D3;
+  --shadow-brand-panel: 10px 10px 20px #C7C7C7, -10px -10px 20px #FAFAFA;
+  --shadow-brand-tab: -10px -10px 20px #FAFAFA, 10px 10px 20px #D3D3D3;
+  --shadow-brand-btn: inset 10px 10px 20px #D3D3D3, inset -10px -10px 20px #FAFAFA;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-brand-background);
+    min-height: 100vh;
+    font-family: var(--font-figtree);
+  }
+}
+
+/* Tiptap Placeholder Styling */
+.tiptap p.is-editor-empty:first-child::before {
+  color: #9CA3AF; /* text-gray-400 */
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
