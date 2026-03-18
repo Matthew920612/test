@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, ArrowUp, Zap, Sparkles, Wand2, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, ArrowUp, ArrowUpRight, Zap, Sparkles, Wand2, X, Image as ImageIcon } from 'lucide-react';
 import type { SessionState, Message, AgentState } from '../App';
+import newSessionIcon from '../assets/new-session-icon.png';
 
 type ChatPanelProps = {
   onSendMessage: (content: string) => void;
@@ -11,6 +12,8 @@ type ChatPanelProps = {
   messages: Message[];
   agentState: AgentState;
   onGenerateOutput?: (type: 'slide' | 'image') => void;
+  activeFileContextName?: string;
+  onClearFileContext?: () => void;
 };
 
 export default function ChatPanel({ 
@@ -21,7 +24,9 @@ export default function ChatPanel({
   onClearAgent,
   messages,
   agentState,
-  onGenerateOutput
+  onGenerateOutput,
+  activeFileContextName,
+  onClearFileContext
 }: ChatPanelProps) {
   const [inputText, setInputText] = useState('');
   const [isAgentMenuOpen, setIsAgentMenuOpen] = useState(false);
@@ -53,12 +58,7 @@ export default function ChatPanel({
             
             {/* Centered Logo & Title */}
             <div className="flex flex-col items-center gap-5 mb-24 mt-8">
-              <div className="size-[52px] rounded-full border-[2px] border-[#3f3f46] flex items-center justify-center relative shadow-sm opacity-90">
-                 <div className="absolute top-[3px] right-[3px] w-2 h-2 bg-[#3f3f46] rounded-full"></div>
-                 <div className="absolute bottom-2.5 left-2 w-1.5 h-1.5 bg-[#3f3f46] rounded-full"></div>
-                 <div className="w-[18px] h-[18px] rounded-full border-[1.5px] border-[#3f3f46]"></div>
-                 <div className="absolute -top-1 right-5 w-1 h-3.5 bg-[#3f3f46] transform rotate-[35deg] rounded-full"></div>
-              </div>
+              <img src={newSessionIcon} alt="Dokie Logo" className="w-[84px] object-contain opacity-90" />
               <h1 className="text-4xl font-serif italic text-gray-900 tracking-tight">
                 A smarter way to present ideas
               </h1>
@@ -167,17 +167,36 @@ export default function ChatPanel({
       </div>
 
       {/* Bottom Input Area */}
-      <div className={`relative px-4 pb-4 ${sessionState === 'new' ? 'max-w-4xl mx-auto w-full' : ''}`}>
+      <div className="relative px-4 pb-4 max-w-4xl mx-auto w-full">
         
-        {/* Prompt Input Box */}
-        <div className={`bg-white border border-[#e4e4e7] p-4 rounded-[20px] shadow-[0px_2px_12px_rgba(0,0,0,0.03)] flex flex-col gap-3 relative z-20 ${sessionState === 'new' ? 'min-h-[160px]' : ''}`}>
-          <textarea 
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe your presentation info..."
-            className={`w-full text-[15px] placeholder-gray-400 text-gray-900 resize-none outline-none bg-transparent ${sessionState === 'new' ? 'h-[70px]' : 'h-[40px]'}`}
-          ></textarea>
+        {/* Prompt Input Box Container */}
+        <div className={`border border-[#e4e4e7] rounded-[24px] shadow-[0px_2px_12px_rgba(0,0,0,0.03)] flex flex-col relative z-20 overflow-hidden transition-all duration-300 ${sessionState === 'new' ? 'min-h-[160px]' : ''}`}>
+          
+          {/* File Context Bar */}
+          {activeFileContextName && (
+            <div className="bg-[#f4f4f5] px-5 py-3 flex justify-between items-center border-b border-[#e4e4e7]">
+              <div className="flex items-center gap-2 text-gray-900">
+                <ArrowUpRight className="size-[18px]" strokeWidth={2} />
+                <span className="text-[15px] font-medium">{activeFileContextName}</span>
+              </div>
+              <button 
+                onClick={onClearFileContext}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <X className="size-[18px]" />
+              </button>
+            </div>
+          )}
+
+          {/* Inner Input Area */}
+          <div className="bg-white p-4 flex flex-col gap-3 flex-1 mt-1">
+            <textarea 
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe your presentation info..."
+              className={`w-full text-[15px] placeholder-gray-400 text-gray-900 resize-none outline-none bg-transparent px-1 ${sessionState === 'new' ? 'h-[70px]' : 'h-[40px]'}`}
+            ></textarea>
           
           <div className="flex justify-between items-end mt-auto">
             
@@ -262,6 +281,7 @@ export default function ChatPanel({
           </div>
         </div>
       </div>
+    </div>
 
     </div>
   );

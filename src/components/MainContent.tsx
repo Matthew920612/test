@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import type { TabInfo } from '../App';
+import SlideGenerator from './SlideGenerator';
 
 type MainContentProps = {
   onSelectAgent?: (agentId: 'Slide' | 'Image') => void;
@@ -168,62 +169,9 @@ export default function MainContent({
           </div>
         )}
 
-        {/* Mock Slide Deliverable */}
+        {/* Slide Generator Workflow */}
         {activeTab?.type === 'slide' && (
-          <div className="max-w-[800px] w-full flex flex-col items-center">
-            
-            <div className="w-full flex justify-between items-center mb-6">
-              <h2 className="text-xl font-medium text-gray-900">{activeTab.title}</h2>
-              <button 
-                onClick={() => onSelectAgent?.('Slide')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-full text-sm font-medium transition"
-              >
-                <Sparkles className="size-4" />
-                <span>Modify Slide</span>
-              </button>
-            </div>
-
-            {/* Slide Container (16:9 Aspect Ratio) */}
-            <div className="w-full aspect-video bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden relative flex flex-col">
-              {/* Header */}
-              <div className="h-16 border-b border-gray-100 flex items-center px-8 bg-gray-50/50">
-                <div className="h-4 w-32 bg-indigo-100 rounded-md"></div>
-              </div>
-              {/* Content */}
-              <div className="flex-1 p-10 flex flex-col gap-6">
-                 <h1 className="text-4xl font-bold tracking-tight text-gray-900 leading-tight max-w-2xl bg-gradient-to-r from-indigo-700 to-purple-600 bg-clip-text text-transparent">
-                   Market Analysis & Strategic Positioning
-                 </h1>
-                 <div className="w-20 h-1.5 bg-indigo-600 rounded-full"></div>
-                 
-                 <div className="flex-1 flex gap-8 mt-4">
-                   <div className="flex-1 flex flex-col gap-4">
-                      <div className="h-4 w-full bg-gray-100 rounded-md"></div>
-                      <div className="h-4 w-5/6 bg-gray-100 rounded-md"></div>
-                      <div className="h-4 w-full bg-gray-100 rounded-md"></div>
-                      <div className="h-4 w-4/6 bg-gray-100 rounded-md"></div>
-                   </div>
-                   <div className="flex-1 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-center relative overflow-hidden">
-                      {/* Mock Chart */}
-                      <div className="absolute bottom-0 left-8 w-12 h-[40%] bg-blue-200 rounded-t-sm"></div>
-                      <div className="absolute bottom-0 left-24 w-12 h-[75%] bg-indigo-400 rounded-t-sm"></div>
-                      <div className="absolute bottom-0 left-40 w-12 h-[60%] bg-purple-300 rounded-t-sm"></div>
-                      <div className="absolute bottom-0 left-56 w-12 h-[90%] bg-indigo-600 rounded-t-sm"></div>
-                      <div className="absolute bottom-8 w-[80%] h-px bg-gray-200"></div>
-                   </div>
-                 </div>
-              </div>
-            </div>
-            
-            {/* Slide Navigation Mock */}
-            <div className="mt-6 flex gap-2">
-              <div className="size-2 rounded-full bg-indigo-600 border border-indigo-600"></div>
-              <div className="size-2 rounded-full bg-transparent border border-gray-300"></div>
-              <div className="size-2 rounded-full bg-transparent border border-gray-300"></div>
-              <div className="size-2 rounded-full bg-transparent border border-gray-300"></div>
-            </div>
-
-          </div>
+          <SlideGenerator title={activeTab.title} onSelectAgent={onSelectAgent} />
         )}
 
         {/* Mock Image Deliverable */}

@@ -23,6 +23,7 @@ export type WorkspaceInfo = {
   messages: Message[];
   openTabs: TabInfo[];
   activeTabId: string;
+  chatContextFileId?: string;
   sessionState: SessionState;
 };
 
@@ -49,6 +50,19 @@ function App() {
   
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([
     { 
+      id: 'home', 
+      name: 'Home', 
+      color: 'bg-gray-100', // Home doesn't need a bright color
+      initial: '', // Rendered as an icon in SidebarStrip
+      folders: [],
+      assets: [],
+      messages: [],
+      openTabs: [],
+      activeTabId: '',
+      chatContextFileId: undefined,
+      sessionState: 'new'
+    },
+    { 
       id: 'ws1', 
       name: 'Workspace 1', 
       color: 'bg-blue-600', 
@@ -66,18 +80,23 @@ function App() {
         }
       ],
       assets: [],
-      messages: [],
-      openTabs: [
-        { id: 't1', title: 'Feature Guide', type: 'guide' } // Initial default tab
+      messages: [
+        { id: 'm1', role: 'user', content: "Let's work on the brand identity!" },
+        { id: 'm2', role: 'assistant', content: "Sounds great. I've created the initial draft and slides." }
       ],
-      activeTabId: 't1',
+      openTabs: [
+        { id: 'c1', title: 'Brain V1.2', type: 'guide' },
+        { id: 'c2', title: 'Pitch Deck', type: 'slide' }
+      ],
+      activeTabId: 'c1',
+      chatContextFileId: 'c1',
       sessionState: 'active'
     },
   ]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws1');
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState('home');
 
   // Folders vs Assets View
-  const [activeSidebarTab, setActiveSidebarTab] = useState<'Projects' | 'Assets'>('Projects');
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'Sessions' | 'Assets'>('Sessions');
 
   // Layout Session State
   const [selectedAgent, setSelectedAgent] = useState<'Slide' | 'Image' | 'Task' | null>(null);
@@ -151,7 +170,8 @@ function App() {
           sessionState: 'new' as SessionState,
           messages: [],
           openTabs: [],
-          activeTabId: ''
+          activeTabId: newFolder.id,
+          chatContextFileId: undefined
         };
       }
       return ws;
@@ -163,15 +183,21 @@ function App() {
   const handleToggleFolder = (folderId: string) => {
     setWorkspaces(workspaces.map(ws => {
       if (ws.id === activeWorkspaceId) {
-        if (activeSidebarTab === 'Projects') {
+        if (activeSidebarTab === 'Sessions') {
           return {
              ...ws,
-             folders: ws.folders.map(f => f.id === folderId ? { ...f, isOpen: !f.isOpen } : f)
+             activeTabId: folderId,
+             chatContextFileId: undefined,
+             openTabs: ws.activeTabId === folderId ? ws.openTabs : [], // Clear tabs only if switching sessions
+             folders: ws.folders.map(f => f.id === folderId ? { ...f, isOpen: ws.activeTabId === folderId ? !f.isOpen : true } : f)
           };
         } else {
            return {
              ...ws,
-             assets: ws.assets.map(a => a.id === folderId ? { ...a, isOpen: !a.isOpen } : a)
+             activeTabId: folderId,
+             chatContextFileId: undefined,
+             openTabs: ws.activeTabId === folderId ? ws.openTabs : [],
+             assets: ws.assets.map(a => a.id === folderId ? { ...a, isOpen: ws.activeTabId === folderId ? !a.isOpen : true } : a)
            };
         }
       }
@@ -185,6 +211,7 @@ function App() {
     if (existingTab) {
       updateWorkspace({ 
         activeTabId: fileId,
+        chatContextFileId: fileId,
         sessionState: sessionState === 'new' ? 'active' : sessionState
       });
     } else {
@@ -196,6 +223,7 @@ function App() {
       updateWorkspace({ 
         openTabs: [...openTabs, newTab],
         activeTabId: fileId,
+        chatContextFileId: fileId,
         sessionState: sessionState === 'new' ? 'active' : sessionState
       });
     }
@@ -257,6 +285,7 @@ function App() {
       setAgentState('drafting');
     }
 
+    // Proceed with state updates
     updateWorkspace({
        messages: newMessages,
        folders: newFolders,
@@ -264,6 +293,22 @@ function App() {
        activeTabId: newActiveTabId,
        sessionState: newSessionState
     });
+
+    // Command shortcuts interception before AI runs
+    if (lowerContent === 'slide' || lowerContent === '/slide') {
+      setTimeout(() => {
+        handleGenerateOutput('slide');
+        setAgentState('idle'); 
+      }, 100);
+      return;
+    }
+    if (lowerContent === 'image' || lowerContent === '/image') {
+      setTimeout(() => {
+        handleGenerateOutput('image');
+        setAgentState('idle');
+      }, 100);
+      return;
+    }
 
     // Run real AI chat request
     const runAI = async () => {
@@ -312,7 +357,25 @@ function App() {
 
   const handleGenerateOutput = (type: 'slide' | 'image') => {
     const fileId = `file_${Date.now()}`;
-    const fileName = type === 'slide' ? 'Pitch Deck.slide' : 'Generated Assets.png';
+    
+    // Count existing files of this type in the active workspace
+    const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
+    let count = 0;
+    if (activeWs) {
+      activeWs.folders.forEach(f => {
+        f.children.forEach(c => {
+          if (c.type === type) count++;
+        });
+      });
+      activeWs.assets.forEach(f => {
+        f.children.forEach(c => {
+          if (c.type === type) count++;
+        });
+      });
+    }
+    const index = count + 1;
+    const baseTitle = type === 'slide' ? `Pitch Deck ${index}` : `Generated Image ${index}`;
+    const fileName = type === 'slide' ? `${baseTitle}.slide` : `${baseTitle}.png`;
 
     // 1. Add file to the Untitled Project folder for the ACTIVE workspace
     setWorkspaces(workspaces.map(ws => {
@@ -333,8 +396,9 @@ function App() {
         return { 
           ...ws, 
           folders: newFolders,
-          openTabs: [...ws.openTabs, { id: fileId, title: type === 'slide' ? 'Pitch Deck' : 'Generated Assets', type }],
+          openTabs: [...ws.openTabs, { id: fileId, title: baseTitle, type }],
           activeTabId: fileId,
+          chatContextFileId: fileId,
           messages: [...ws.messages, {
             id: `m_${Date.now()+1}`,
             role: 'assistant',
@@ -380,7 +444,8 @@ function App() {
             workspaceName={activeWorkspace?.name}
             activeTab={activeSidebarTab}
             setActiveTab={setActiveSidebarTab}
-            folders={activeSidebarTab === 'Projects' ? activeWorkspace.folders : activeWorkspace.assets}
+            folders={activeSidebarTab === 'Sessions' ? activeWorkspace.folders : activeWorkspace.assets}
+            activeTabId={activeTabId}
             onCreateFolder={handleCreateFolder}
             onToggleFolder={handleToggleFolder}
             onOpenFile={handleOpenFile}
@@ -401,7 +466,7 @@ function App() {
           {/* 2. Middle Chat Panel */}
           <div 
             className={`bg-white/80 backdrop-blur-md rounded-[16px] h-full overflow-hidden flex-shrink-0 shadow-[0px_1px_3px_0px_rgba(25,33,61,0.1)] border border-[#e4e4e7] flex flex-col relative transition-all duration-300 ease-in-out ${
-              sessionState === 'new' ? 'flex-1' : 'w-[380px]'
+              sessionState === 'new' || openTabs.length === 0 ? 'flex-1' : 'w-[380px]'
             }`}
           >
             <ChatPanel 
@@ -413,6 +478,8 @@ function App() {
               messages={messages}
               agentState={agentState}
               onGenerateOutput={handleGenerateOutput}
+              activeFileContextName={openTabs.find(t => t.id === activeWorkspace.chatContextFileId)?.title}
+              onClearFileContext={() => updateWorkspace({ chatContextFileId: undefined })}
             />
           </div>
 
@@ -426,7 +493,7 @@ function App() {
               onSelectAgent={setSelectedAgent}
               openTabs={openTabs}
               activeTabId={activeTabId}
-              onSetActiveTab={(tabId) => updateWorkspace({ activeTabId: tabId })}
+              onSetActiveTab={(tabId) => updateWorkspace({ activeTabId: tabId, chatContextFileId: tabId })}
               onCloseTab={handleCloseTab}
             />
           </div>

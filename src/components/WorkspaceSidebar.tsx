@@ -1,11 +1,12 @@
-import { Plus, FolderOpen, FolderClosed, FileText, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, MessageSquare, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import type { FolderInfo } from '../App';
 
 type WorkspaceSidebarProps = {
   workspaceName?: string;
-  activeTab: 'Projects' | 'Assets';
-  setActiveTab: (tab: 'Projects' | 'Assets') => void;
+  activeTab: 'Sessions' | 'Assets';
+  setActiveTab: (tab: 'Sessions' | 'Assets') => void;
   folders: FolderInfo[];
+  activeTabId?: string;
   onCreateFolder: () => void;
   onToggleFolder: (id: string) => void;
   onOpenFile: (fileId: string, fileName: string, fileType: 'draft' | 'slide' | 'image' | 'guide') => void;
@@ -16,6 +17,7 @@ export default function WorkspaceSidebar({
   activeTab,
   setActiveTab,
   folders,
+  activeTabId,
   onCreateFolder,
   onToggleFolder,
   onOpenFile
@@ -31,10 +33,10 @@ export default function WorkspaceSidebar({
       <div className="px-4 mb-4 shrink-0">
         <div className="bg-gray-100/60 p-1 rounded-full flex gap-1 items-center">
           <button 
-            onClick={() => setActiveTab('Projects')}
-            className={`flex-1 rounded-full py-1 text-sm font-medium transition-colors ${activeTab === 'Projects' ? 'bg-white shadow-tab text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+            onClick={() => setActiveTab('Sessions')}
+            className={`flex-1 rounded-full py-1 text-sm font-medium transition-colors ${activeTab === 'Sessions' ? 'bg-white shadow-tab text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
           >
-            Projects
+            Sessions
           </button>
           <button 
             onClick={() => setActiveTab('Assets')}
@@ -52,7 +54,7 @@ export default function WorkspaceSidebar({
           className="w-full border border-gray-200 rounded-lg flex items-center justify-center gap-2 py-2 hover:bg-gray-50 transition-colors"
         >
           <Plus className="size-4 text-gray-700" />
-          <span className="text-sm font-medium text-gray-800">Create new</span>
+          <span className="text-sm font-medium text-gray-800">New session</span>
         </button>
       </div>
 
@@ -65,17 +67,17 @@ export default function WorkspaceSidebar({
             {/* Folder Header */}
             <div 
               onClick={() => onToggleFolder(folder.id)}
-              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-md cursor-pointer transition-colors group"
+              className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors group ${
+                activeTabId === folder.id ? 'bg-blue-50/80' : 'hover:bg-gray-50'
+              }`}
             >
               <div className="text-gray-400 group-hover:text-gray-600 transition-colors">
                 {folder.isOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
               </div>
-              {folder.isOpen ? (
-                <FolderOpen className="size-4 text-gray-500" />
-              ) : (
-                <FolderClosed className="size-4 text-gray-500" />
-              )}
-              <span className="text-sm text-gray-900 font-medium">{folder.name}</span>
+              <MessageSquare className={`size-4 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
+              <span className={`text-sm font-medium ${activeTabId === folder.id ? 'text-blue-900 font-semibold' : 'text-gray-900'}`}>
+                {folder.name}
+              </span>
             </div>
             
             {/* Sub Items Container */}
@@ -84,16 +86,21 @@ export default function WorkspaceSidebar({
                 folder.isOpen ? 'max-h-[500px] opacity-100 mt-1' : 'max-h-0 opacity-0'
               }`}
             >
-              {folder.children.map(child => (
-                <div 
-                  key={child.id} 
-                  onClick={() => onOpenFile(child.id, child.name, child.type)}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-md cursor-pointer transition-colors"
-                >
-                  <FileText className="size-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">{child.name}</span>
-                </div>
-              ))}
+              {folder.children.map(child => {
+                const isActive = activeTabId === child.id;
+                return (
+                  <div 
+                    key={child.id} 
+                    onClick={() => onOpenFile(child.id, child.name, child.type)}
+                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${
+                      isActive ? 'bg-blue-50/80 text-blue-700' : 'hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <FileText className={`size-4 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                    <span className={`text-sm ${isActive ? 'font-semibold' : ''}`}>{child.name}</span>
+                  </div>
+                );
+              })}
               
               {/* Optional: Add a subtle 'Empty' state if child is empty and folder is open */}
               {folder.isOpen && folder.children.length === 0 && (
@@ -107,7 +114,7 @@ export default function WorkspaceSidebar({
         {/* Static Default File Items to show scrolling / structure */}
         {folders.length === 0 && (
           <div className="px-2 py-4 text-sm text-gray-400 text-center">
-            {activeTab === 'Projects' ? 'No projects yet. Start a chat or click "Create new".' : 'No assets uploaded yet.'}
+            {activeTab === 'Sessions' ? 'No sessions yet. Start a chat or click "New session".' : 'No assets uploaded yet.'}
           </div>
         )}
       </div>

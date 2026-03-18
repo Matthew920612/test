@@ -1,7 +1,8 @@
 import { 
   Plus, 
   PanelLeftClose,
-  PanelLeft
+  PanelLeft,
+  Home
 } from 'lucide-react';
 import type { WorkspaceInfo } from '../App';
 
@@ -47,8 +48,12 @@ export default function SidebarStrip({
                   : 'hover:bg-black/5 opacity-70 hover:opacity-100'
               }`}
             >
-              <div className={`size-8 ${ws.color} text-white rounded flex items-center justify-center font-bold text-sm`}>
-                {ws.initial}
+              <div className={`size-8 ${ws.color} rounded flex items-center justify-center font-bold text-sm`}>
+                {ws.id === 'home' ? (
+                  <Home className={`size-5 ${isActive ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`} />
+                ) : (
+                  <span className="text-white">{ws.initial}</span>
+                )}
               </div>
             </div>
           );
