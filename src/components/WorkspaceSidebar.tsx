@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, FileText, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, MessageSquare, FileText, ChevronDown, ChevronRight, Upload } from 'lucide-react';
 import type { FolderInfo } from '../App';
 
 type WorkspaceSidebarProps = {
@@ -47,14 +47,20 @@ export default function WorkspaceSidebar({
         </div>
       </div>
 
-      {/* Create new button */}
+      {/* Create new / Upload file button */}
       <div className="px-4 mb-6 shrink-0">
         <button 
-          onClick={onCreateFolder}
+          onClick={activeTab === 'Sessions' ? onCreateFolder : () => {}}
           className="w-full border border-gray-200 rounded-lg flex items-center justify-center gap-2 py-2 hover:bg-gray-50 transition-colors"
         >
-          <Plus className="size-4 text-gray-700" />
-          <span className="text-sm font-medium text-gray-800">New session</span>
+          {activeTab === 'Sessions' ? (
+            <Plus className="size-4 text-gray-700" />
+          ) : (
+            <Upload className="size-4 text-gray-700" />
+          )}
+          <span className="text-sm font-medium text-gray-800">
+            {activeTab === 'Sessions' ? 'New session' : 'Upload file'}
+          </span>
         </button>
       </div>
 
@@ -66,12 +72,14 @@ export default function WorkspaceSidebar({
             
             {/* Folder Header */}
             <div 
-              onClick={() => onToggleFolder(folder.id)}
-              className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors group ${
+              onClick={() => {
+                onToggleFolder(folder.id);
+              }}
+              className={`flex items-center gap-2 p-2 rounded-md transition-colors group cursor-pointer ${
                 activeTabId === folder.id ? 'bg-blue-50/80' : 'hover:bg-gray-50'
               }`}
             >
-              <div className="text-gray-400 group-hover:text-gray-600 transition-colors">
+              <div className={`transition-colors ${folder.children.length > 0 || activeTab === 'Assets' ? 'text-gray-400 group-hover:text-gray-600' : 'opacity-0'}`}>
                 {folder.isOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
               </div>
               <MessageSquare className={`size-4 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
@@ -102,10 +110,6 @@ export default function WorkspaceSidebar({
                 );
               })}
               
-              {/* Optional: Add a subtle 'Empty' state if child is empty and folder is open */}
-              {folder.isOpen && folder.children.length === 0 && (
-                <div className="p-2 text-xs text-gray-400 italic">Empty Folder</div>
-              )}
             </div>
             
           </div>

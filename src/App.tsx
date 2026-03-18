@@ -10,6 +10,8 @@ export type FolderInfo = {
   id: string;
   name: string;
   isOpen: boolean;
+  messages?: Message[];
+  sessionState?: SessionState;
   children: { id: string; name: string, type: 'draft' | 'slide' | 'image' | 'guide' }[];
 };
 
@@ -30,7 +32,7 @@ export type WorkspaceInfo = {
 export type TabInfo = {
   id: string;
   title: string;
-  type: 'draft' | 'slide' | 'image' | 'guide';
+  type: 'draft' | 'slide' | 'image' | 'guide' | 'folder';
 };
 
 export type Message = {
@@ -79,7 +81,25 @@ function App() {
           ]
         }
       ],
-      assets: [],
+      assets: [
+        {
+          id: 'a1',
+          name: 'Logos & Branding',
+          isOpen: true,
+          children: [
+            { id: 'img1', name: 'Primary_Logo.png', type: 'image' },
+            { id: 'img2', name: 'Brand_Guidelines', type: 'guide' },
+          ]
+        },
+        {
+          id: 'a2',
+          name: 'Marketing Material',
+          isOpen: false,
+          children: [
+            { id: 'img3', name: 'Promo_Banner.png', type: 'image' },
+          ]
+        }
+      ],
       messages: [
         { id: 'm1', role: 'user', content: "Let's work on the brand identity!" },
         { id: 'm2', role: 'assistant', content: "Sounds great. I've created the initial draft and slides." }
@@ -104,10 +124,27 @@ function App() {
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
 
   // Derived state from active workspace
-  const messages = activeWorkspace.messages;
   const openTabs = activeWorkspace.openTabs;
   const activeTabId = activeWorkspace.activeTabId;
   const sessionState = activeWorkspace.sessionState;
+
+  let activeFolder = activeWorkspace.folders.find(f => f.id === activeTabId) 
+    || activeWorkspace.assets.find(f => f.id === activeTabId);
+  
+  if (!activeFolder) {
+    activeFolder = activeWorkspace.folders.find(f => f.children.some(c => c.id === activeTabId))
+      || activeWorkspace.assets.find(f => f.children.some(c => c.id === activeTabId));
+  }
+  
+  if (!activeFolder && activeWorkspace.folders.length > 0) {
+    activeFolder = activeWorkspace.folders[0];
+  }
+
+  const activeFolderId = activeFolder?.id;
+  const sessionFiles = activeFolder ? activeFolder.children : [];
+
+  const currentMessages = activeFolder?.messages || activeWorkspace.messages;
+  const currentSessionState = activeFolder?.sessionState || (activeFolder && activeFolder.children.length > 0 ? 'active' : activeWorkspace.sessionState);
 
   // Helper macro to update active workspace state easily
   const updateWorkspace = (updates: Partial<WorkspaceInfo>) => {
@@ -162,6 +199,8 @@ function App() {
           id: `f${Date.now()}`,
           name: `New Session ${ws.folders.length + 1}`,
           isOpen: true,
+          messages: [],
+          sessionState: 'new',
           children: []
         };
         return {
@@ -187,8 +226,8 @@ function App() {
           return {
              ...ws,
              activeTabId: folderId,
-             chatContextFileId: undefined,
-             openTabs: ws.activeTabId === folderId ? ws.openTabs : [], // Clear tabs only if switching sessions
+             chatContextFileId: ws.folders.find(f => f.id === folderId)?.children.length ? folderId : undefined,
+             openTabs: ws.openTabs,
              folders: ws.folders.map(f => f.id === folderId ? { ...f, isOpen: ws.activeTabId === folderId ? !f.isOpen : true } : f)
           };
         } else {
@@ -196,7 +235,7 @@ function App() {
              ...ws,
              activeTabId: folderId,
              chatContextFileId: undefined,
-             openTabs: ws.activeTabId === folderId ? ws.openTabs : [],
+             openTabs: ws.openTabs,
              assets: ws.assets.map(a => a.id === folderId ? { ...a, isOpen: ws.activeTabId === folderId ? !a.isOpen : true } : a)
            };
         }
@@ -229,18 +268,46 @@ function App() {
     }
   };
 
-  const handleSendMessage = (content: string) => {
-    const newUserMsg: Message = { id: `m_${Date.now()}`, role: 'user', content };
-    let newMessages = [...messages, newUserMsg];
-    let newOpenTabs = [...openTabs];
-    let newActiveTabId = activeTabId;
-    let newSessionState = sessionState;
-    let newFolders = [...activeWorkspace.folders];
+  const handleSyncTabSelection = (tabId: string) => {
+    let updatedFolders = activeWorkspace.folders;
+    let updatedAssets = activeWorkspace.assets;
+    let changed = false;
 
+    const parentFolder = activeWorkspace.folders.find(f => f.children.some(c => c.id === tabId)) 
+      || activeWorkspace.assets.find(f => f.children.some(c => c.id === tabId));
+      
+    if (parentFolder && !parentFolder.isOpen) {
+      changed = true;
+      const inFolders = activeWorkspace.folders.some(f => f.id === parentFolder.id);
+      if (inFolders) {
+        updatedFolders = activeWorkspace.folders.map(f => f.id === parentFolder.id ? { ...f, isOpen: true } : f);
+      } else {
+        updatedAssets = activeWorkspace.assets.map(f => f.id === parentFolder.id ? { ...f, isOpen: true } : f);
+      }
+    }
+
+    if (tabId !== activeTabId || changed) {
+       updateWorkspace({ 
+          activeTabId: tabId, 
+          chatContextFileId: tabId, 
+          folders: updatedFolders, 
+          assets: updatedAssets 
+       });
+    } else {
+       updateWorkspace({ chatContextFileId: tabId });
+    }
+  };
+
+  const handleSendMessage = (content: string, shortcut: string | null = null) => {
+    const newUserMsg: Message = { id: `m_${Date.now()}`, role: 'user', content };
+    const isCurrentlyNew = currentSessionState === 'new';
+    
+    let newActiveTabId = activeTabId;
+    let autoCollapsedSidebar = false;
+
+    // Command shortcuts interception before AI runs
     const lowerContent = content.toLowerCase();
     let effectiveAgent = selectedAgent;
-
-    // Auto-select agent based on prompt keywords if no agent is currently selected
     if (!effectiveAgent) {
       if (lowerContent.includes('slide') || lowerContent.includes('ppt') || lowerContent.includes('幻灯片') || lowerContent.includes('演示')) {
         effectiveAgent = 'Slide';
@@ -250,63 +317,92 @@ function App() {
         setSelectedAgent('Image');
       }
     }
-
-    // Auto-focus logic: If an agent is selected, switch to its corresponding tab if it exists
     if (effectiveAgent) {
-      const targetType = effectiveAgent.toLowerCase() as 'slide' | 'image' | 'guide'; // Assuming 'task' might map differently later, but aligns with 'slide'/'image' for now
+      const targetType = effectiveAgent.toLowerCase() as 'slide' | 'image' | 'guide';
       const matchingTab = openTabs.find(t => t.type === targetType);
       if (matchingTab) {
         newActiveTabId = matchingTab.id;
       }
     }
 
-    if (sessionState === 'new') {
-      const newProjectId = `proj_${Date.now()}`;
-      const draftFileId = `draft_${Date.now()}`;
-      
-      // Auto-create a Project folder and a Draft file inside it
-      const newProject: FolderInfo = {
-        id: newProjectId,
-        name: 'Untitled Project',
-        isOpen: true,
-        children: [
-          { id: draftFileId, name: 'Draft', type: 'draft' }
-        ]
-      };
-      newFolders = [newProject, ...newFolders];
-      
-      // Auto-open Draft tab
-      const draftTab: TabInfo = { id: draftFileId, title: 'Draft', type: 'draft' };
-      newOpenTabs = [draftTab];
-      newActiveTabId = draftFileId;
-      newSessionState = 'active';
-      
-      setIsSidebarOpen(false); // Auto-collapse sidebar when starting active session
-      setAgentState('drafting');
+    let targetFolderId = activeFolderId;
+    let isAutoGeneratingFolder = false;
+
+    if (!targetFolderId || !activeWorkspace.folders.some(f => f.id === targetFolderId)) {
+        if (activeWorkspace.folders.length > 0) {
+            targetFolderId = activeWorkspace.folders[0].id;
+        } else {
+            targetFolderId = `folder_${Date.now()}`;
+            isAutoGeneratingFolder = true;
+        }
     }
 
-    // Proceed with state updates
-    updateWorkspace({
-       messages: newMessages,
-       folders: newFolders,
-       openTabs: newOpenTabs,
-       activeTabId: newActiveTabId,
-       sessionState: newSessionState
-    });
+    setWorkspaces(prev => prev.map(ws => {
+      if (ws.id === activeWorkspaceId) {
+        let updatedFolders = ws.folders;
+        if (isAutoGeneratingFolder && updatedFolders.length === 0) {
+            updatedFolders = [{
+                id: targetFolderId!,
+                name: 'Untitled Session',
+                children: [],
+                isOpen: true,
+                messages: [],
+                sessionState: 'new'
+            }];
+        }
 
-    // Command shortcuts interception before AI runs
-    if (lowerContent === 'slide' || lowerContent === '/slide') {
-      setTimeout(() => {
-        handleGenerateOutput('slide');
-        setAgentState('idle'); 
-      }, 100);
+        let targetFolder = updatedFolders.find(f => f.id === targetFolderId);
+        
+        let newOpenTabs = ws.openTabs;
+        let finalMessages = currentMessages;
+
+        if (targetFolder) {
+          const oldMsgs = targetFolder.messages || ws.messages;
+          finalMessages = [...oldMsgs, newUserMsg];
+          updatedFolders = updatedFolders.map(f => {
+            if (f.id === targetFolder!.id) {
+               return {
+                  ...f,
+                  messages: finalMessages,
+                  sessionState: 'active' as SessionState,
+                  name: isCurrentlyNew || isAutoGeneratingFolder ? 'Untitled Session' : f.name,
+                  children: isCurrentlyNew || isAutoGeneratingFolder ? [{ id: `draft_${Date.now()}`, name: 'Draft', type: 'draft' as any }] : f.children
+               };
+            }
+            return f;
+          });
+          
+          if (isCurrentlyNew || isAutoGeneratingFolder) {
+            const draftFileId = updatedFolders.find(f => f.id === targetFolder!.id)?.children[0].id;
+            if (draftFileId) {
+              newOpenTabs = [{ id: draftFileId, title: 'Draft', type: 'draft' as any }, ...ws.openTabs];
+              newActiveTabId = draftFileId;
+              autoCollapsedSidebar = true;
+            }
+          }
+        }
+
+        return {
+          ...ws,
+          folders: updatedFolders,
+          messages: finalMessages, // optionally keep workspace fallback synced
+          sessionState: 'active' as SessionState,
+          openTabs: newOpenTabs,
+          activeTabId: newActiveTabId
+        };
+      }
+      return ws;
+    }));
+
+    if (autoCollapsedSidebar) setIsSidebarOpen(false);
+    if (isCurrentlyNew || isAutoGeneratingFolder) setAgentState('drafting');
+
+    if (shortcut === 'slide' || lowerContent === 'slide' || lowerContent === '/slide') {
+      setTimeout(() => { handleGenerateOutput('slide', targetFolderId!); setAgentState('idle'); }, 100);
       return;
     }
-    if (lowerContent === 'image' || lowerContent === '/image') {
-      setTimeout(() => {
-        handleGenerateOutput('image');
-        setAgentState('idle');
-      }, 100);
+    if (shortcut === 'social_image' || shortcut === 'long_image' || lowerContent === 'image' || lowerContent === '/image') {
+      setTimeout(() => { handleGenerateOutput('image', targetFolderId!); setAgentState('idle'); }, 100);
       return;
     }
 
@@ -314,49 +410,57 @@ function App() {
     const runAI = async () => {
       try {
         const assistantMsgId = `m_${Date.now()+1}`;
-        // Create an empty assistant message first
-        setWorkspaces(prev => prev.map(ws => ws.id === activeWorkspaceId ? {
-          ...ws,
-          messages: [...ws.messages, { id: assistantMsgId, role: 'assistant', content: "" }]
-        } : ws));
+        setWorkspaces(prev => prev.map(ws => {
+          if (ws.id === activeWorkspaceId) {
+             const preUpdatedFolders = ws.folders.map(f => {
+               if (f.id === targetFolderId) {
+                 return { ...f, messages: [...(f.messages || ws.messages), { id: assistantMsgId, role: 'assistant' as 'assistant', content: "" }] };
+               }
+               return f;
+             });
+             return { ...ws, folders: preUpdatedFolders, messages: [...ws.messages, { id: assistantMsgId, role: 'assistant' as 'assistant', content: "" }] };
+          }
+          return ws;
+        }));
 
-        // Start stream using the history so far
-        const stream = generateChatResponseStream(newMessages);
+        const historyForStream = [...currentMessages, newUserMsg];
+        const stream = generateChatResponseStream(historyForStream);
         let accumulatedText = "";
         
         for await (const chunk of stream) {
            accumulatedText += chunk;
            setWorkspaces(prev => prev.map(ws => {
               if (ws.id === activeWorkspaceId) {
-                 const msgs = [...ws.messages];
-                 const lastMsg = msgs[msgs.length - 1];
-                 if (lastMsg.id === assistantMsgId) {
-                    // Create a new object for immutability
-                    msgs[msgs.length - 1] = { ...lastMsg, content: accumulatedText };
-                 }
-                 return { ...ws, messages: msgs };
+                 const midUpdatedFolders = ws.folders.map(f => {
+                   if (f.id === targetFolderId) {
+                     const msgs = [...(f.messages || [])];
+                     const lastMsg = msgs[msgs.length - 1];
+                     if (lastMsg.id === assistantMsgId) msgs[msgs.length - 1] = { ...lastMsg, content: accumulatedText };
+                     return { ...f, messages: msgs };
+                   }
+                   return f;
+                 });
+                 
+                 const wsMsgs = [...ws.messages];
+                 if (wsMsgs[wsMsgs.length - 1]?.id === assistantMsgId) wsMsgs[wsMsgs.length - 1] = { ...wsMsgs[wsMsgs.length - 1], content: accumulatedText };
+
+                 return { ...ws, folders: midUpdatedFolders, messages: wsMsgs };
               }
               return ws;
            }));
         }
-        
-        if (sessionState === 'new') {
-           setAgentState('complete'); // Move to complete to show next actions
-        }
+        if (isCurrentlyNew || isAutoGeneratingFolder) setAgentState('complete');
       } catch (err: any) {
         console.error(err);
-        setWorkspaces(prev => prev.map(ws => ws.id === activeWorkspaceId ? {
-          ...ws,
-          messages: [...ws.messages, { id: `err_${Date.now()}`, role: 'assistant', content: `Error: ${err.message}` }]
-        } : ws));
       }
     };
     
     runAI();
   };
 
-  const handleGenerateOutput = (type: 'slide' | 'image') => {
+  const handleGenerateOutput = (type: 'slide' | 'image', overrideFolderId?: string) => {
     const fileId = `file_${Date.now()}`;
+    const targetId = overrideFolderId || activeFolderId;
     
     // Count existing files of this type in the active workspace
     const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
@@ -377,33 +481,32 @@ function App() {
     const baseTitle = type === 'slide' ? `Pitch Deck ${index}` : `Generated Image ${index}`;
     const fileName = type === 'slide' ? `${baseTitle}.slide` : `${baseTitle}.png`;
 
-    // 1. Add file to the Untitled Project folder for the ACTIVE workspace
-    setWorkspaces(workspaces.map(ws => {
+    const assistantMsg: Message = {
+      id: `m_${Date.now()+1}`,
+      role: 'assistant',
+      content: `I've generated the ${type === 'slide' ? 'slides' : 'images'} for you! You can view them in the main panel and they've been saved to your session folder.`
+    };
+
+    setWorkspaces(prev => prev.map(ws => {
       if (ws.id === activeWorkspaceId) {
-        const untitledFolderId = ws.folders.find(f => f.name === 'Untitled Project')?.id;
-        let newFolders = ws.folders;
-        if (untitledFolderId) {
-          newFolders = ws.folders.map(f => {
-            if (f.id === untitledFolderId) {
-              return {
-                ...f,
-                children: [...f.children, { id: fileId, name: fileName, type }]
-              };
-            }
-            return f;
-          });
-        }
+        let newFolders = ws.folders.map(f => {
+          if (f.id === targetId) {
+             return { 
+                ...f, 
+                children: [...f.children, { id: fileId, name: fileName, type }],
+                messages: [...(f.messages || []), assistantMsg]
+             };
+          }
+          return f;
+        });
+
         return { 
           ...ws, 
           folders: newFolders,
           openTabs: [...ws.openTabs, { id: fileId, title: baseTitle, type }],
           activeTabId: fileId,
           chatContextFileId: fileId,
-          messages: [...ws.messages, {
-            id: `m_${Date.now()+1}`,
-            role: 'assistant',
-            content: `I've generated the ${type === 'slide' ? 'slides' : 'images'} for you! You can view them in the main panel and they've been saved to your project folder.`
-          }]
+          messages: [...ws.messages, assistantMsg]
         };
       }
       return ws;
@@ -414,9 +517,22 @@ function App() {
 
   const handleCloseTab = (tabId: string) => {
     const newTabs = openTabs.filter(t => t.id !== tabId);
+    
+    const visibleTabs = newTabs.filter(t => sessionFiles.some(f => f.id === t.id));
+    const oldVisibleTabs = openTabs.filter(t => sessionFiles.some(f => f.id === t.id));
+    const currentIndex = oldVisibleTabs.findIndex(t => t.id === tabId);
+    
+    let newActiveTabId = activeTabId;
+    if (activeTabId === tabId) {
+      newActiveTabId = visibleTabs.length > 0 
+        ? (currentIndex > 0 ? visibleTabs[currentIndex - 1].id : visibleTabs[0].id)
+        : (activeFolderId || '');
+    }
+
     updateWorkspace({
       openTabs: newTabs,
-      activeTabId: activeTabId === tabId && newTabs.length > 0 ? newTabs[newTabs.length - 1].id : (activeTabId === tabId ? '' : activeTabId)
+      activeTabId: newActiveTabId,
+      chatContextFileId: newActiveTabId
     });
   };
 
@@ -466,35 +582,45 @@ function App() {
           {/* 2. Middle Chat Panel */}
           <div 
             className={`bg-white/80 backdrop-blur-md rounded-[16px] h-full overflow-hidden flex-shrink-0 shadow-[0px_1px_3px_0px_rgba(25,33,61,0.1)] border border-[#e4e4e7] flex flex-col relative transition-all duration-300 ease-in-out ${
-              sessionState === 'new' || openTabs.length === 0 ? 'flex-1' : 'w-[380px]'
+              !activeWorkspace.chatContextFileId ? 'flex-1' : 'w-[380px]'
             }`}
           >
             <ChatPanel 
               onSendMessage={handleSendMessage} 
-              sessionState={sessionState} 
-              selectedAgent={selectedAgent}
-              onSelectAgent={setSelectedAgent}
-              onClearAgent={() => setSelectedAgent(null)}
-              messages={messages}
+              sessionState={currentSessionState} 
+              messages={currentMessages}
               agentState={agentState}
               onGenerateOutput={handleGenerateOutput}
-              activeFileContextName={openTabs.find(t => t.id === activeWorkspace.chatContextFileId)?.title}
+              activeFileContextName={
+                activeWorkspace.chatContextFileId === activeFolderId 
+                  ? undefined 
+                  : openTabs.find(t => t.id === activeWorkspace.chatContextFileId)?.title
+              }
               onClearFileContext={() => updateWorkspace({ chatContextFileId: undefined })}
+              sessionFiles={sessionFiles}
+              onSelectFileContext={(id) => handleSyncTabSelection(id)}
             />
           </div>
 
           {/* 3. Right Main Content Panel */}
           <div 
             className={`bg-[white] rounded-[16px] flex flex-col relative overflow-hidden transition-all duration-300 ease-in-out ${
-              sessionState === 'new' || openTabs.length === 0 ? 'w-0 opacity-0 min-w-0' : 'flex-1 min-w-[400px] opacity-100'
+              !activeWorkspace.chatContextFileId ? 'w-0 opacity-0 min-w-0 border-0 ml-0' : 'flex-1 min-w-[400px] opacity-100 ml-4 border border-[#e4e4e7]'
             }`}
           >
             <MainContent 
               onSelectAgent={setSelectedAgent}
-              openTabs={openTabs}
-              activeTabId={activeTabId}
-              onSetActiveTab={(tabId) => updateWorkspace({ activeTabId: tabId, chatContextFileId: tabId })}
+              openTabs={
+                sessionFiles.length > 0 && activeFolderId
+                  ? [{ id: activeFolderId, title: 'Session Files', type: 'folder' } as any, ...openTabs.filter(t => sessionFiles.some(f => f.id === t.id))]
+                  : openTabs.filter(t => sessionFiles.some(f => f.id === t.id))
+              }
+              activeTabId={activeWorkspace.chatContextFileId || ''}
+              onSetActiveTab={handleSyncTabSelection}
               onCloseTab={handleCloseTab}
+              sessionFiles={sessionFiles}
+              onOpenFile={(id, name, type) => handleOpenFile(id, name, type)}
+              onManualCollapse={() => updateWorkspace({ chatContextFileId: undefined, activeTabId: activeFolderId })}
             />
           </div>
         </>

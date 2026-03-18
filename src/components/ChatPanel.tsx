@@ -1,42 +1,47 @@
-import { useState } from 'react';
-import { Plus, ArrowUp, ArrowUpRight, Zap, Sparkles, Wand2, X, Image as ImageIcon } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ArrowUp, Image as ImageIcon, Sparkles, Plus, ChevronDown, ArrowUpRight, X, FileText, Wand2, Zap } from 'lucide-react';
 import type { SessionState, Message, AgentState } from '../App';
 import newSessionIcon from '../assets/new-session-icon.png';
 
 type ChatPanelProps = {
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, shortcut?: string | null) => void;
   sessionState: SessionState;
-  selectedAgent?: 'Slide' | 'Image' | 'Task' | null;
   onSelectAgent?: (agent: 'Slide' | 'Image' | 'Task') => void;
-  onClearAgent?: () => void;
   messages: Message[];
   agentState: AgentState;
   onGenerateOutput?: (type: 'slide' | 'image') => void;
   activeFileContextName?: string;
   onClearFileContext?: () => void;
+  sessionFiles?: { id: string; name: string; type: string }[];
+  onSelectFileContext?: (id: string, title: string) => void;
 };
 
 export default function ChatPanel({ 
   onSendMessage, 
   sessionState, 
-  selectedAgent, 
-  onSelectAgent,
-  onClearAgent,
   messages,
   agentState,
   onGenerateOutput,
   activeFileContextName,
-  onClearFileContext
+  onClearFileContext,
+  sessionFiles,
+  onSelectFileContext
 }: ChatPanelProps) {
   const [inputText, setInputText] = useState('');
-  const [isAgentMenuOpen, setIsAgentMenuOpen] = useState(false);
+  const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
+  const [activeShortcut, setActiveShortcut] = useState<string | null>(null);
 
-  const agents = ['Slide', 'Image', 'Task'] as const;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleSend = () => {
     if (!inputText.trim()) return;
-    onSendMessage(inputText);
+    onSendMessage(inputText, activeShortcut);
     setInputText('');
+    setActiveShortcut(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -120,6 +125,40 @@ export default function ChatPanel({
               </div>
             </div>
 
+            {/* Shortcuts */}
+            <div className="w-full max-w-3xl flex flex-col gap-3 mt-4 mb-6">
+              <span className="text-xs font-medium text-gray-900 ml-1">Shortcuts</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button 
+                  onClick={() => setActiveShortcut('slide')}
+                  className="bg-white border border-[#e4e4e7] p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-indigo-200 transition-all text-left flex items-center gap-3 group"
+                >
+                  <div className="text-indigo-400 group-hover:scale-110 transition-transform">
+                    <div className="size-5 border-2 border-current rounded-sm flex items-center justify-center shrink-0"><div className="size-1.5 bg-current rounded-sm"></div></div>
+                  </div>
+                  <span className="font-medium text-gray-900 text-[15px]">Create a slide</span>
+                </button>
+                <button 
+                  onClick={() => setActiveShortcut('social_image')}
+                  className="bg-white border border-[#e4e4e7] p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left flex items-center gap-3 group"
+                >
+                  <div className="text-emerald-400 group-hover:scale-110 transition-transform">
+                    <ImageIcon className="size-5" />
+                  </div>
+                  <span className="font-medium text-gray-900 text-[15px]">Create social media image</span>
+                </button>
+                <button 
+                  onClick={() => setActiveShortcut('long_image')}
+                  className="bg-white border border-[#e4e4e7] p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-orange-200 transition-all text-left flex items-center gap-3 group"
+                >
+                  <div className="text-orange-400 group-hover:scale-110 transition-transform">
+                    <ImageIcon className="size-5" />
+                  </div>
+                  <span className="font-medium text-gray-900 text-[15px]">Create long image</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         ) : (
           // ACTIVE SESSION STATE - Messages
@@ -162,6 +201,7 @@ export default function ChatPanel({
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         )}
       </div>
@@ -170,26 +210,63 @@ export default function ChatPanel({
       <div className="relative px-4 pb-4 max-w-4xl mx-auto w-full">
         
         {/* Prompt Input Box Container */}
-        <div className={`border border-[#e4e4e7] rounded-[24px] shadow-[0px_2px_12px_rgba(0,0,0,0.03)] flex flex-col relative z-20 overflow-hidden transition-all duration-300 ${sessionState === 'new' ? 'min-h-[160px]' : ''}`}>
+        <div className={`border border-[#e4e4e7] rounded-[24px] bg-white shadow-[0px_2px_12px_rgba(0,0,0,0.03)] flex flex-col relative z-20 transition-all duration-300 ${sessionState === 'new' ? 'min-h-[160px]' : ''}`}>
           
           {/* File Context Bar */}
-          {activeFileContextName && (
-            <div className="bg-[#f4f4f5] px-5 py-3 flex justify-between items-center border-b border-[#e4e4e7]">
-              <div className="flex items-center gap-2 text-gray-900">
-                <ArrowUpRight className="size-[18px]" strokeWidth={2} />
-                <span className="text-[15px] font-medium">{activeFileContextName}</span>
-              </div>
-              <button 
-                onClick={onClearFileContext}
-                className="text-gray-400 hover:text-gray-600 transition"
+          {sessionState !== 'new' && sessionFiles && sessionFiles.length > 0 && (
+            <div className="bg-[#f4f4f5] px-5 py-3 flex justify-between items-center border-b border-[#e4e4e7] relative group rounded-t-[24px]">
+              <div 
+                className="flex items-center gap-2 text-gray-900 cursor-pointer"
+                onClick={() => setIsFileMenuOpen(!isFileMenuOpen)}
               >
-                <X className="size-[18px]" />
-              </button>
+                <ArrowUpRight className="size-[18px]" strokeWidth={2} />
+                <span className="text-[15px] font-medium">{activeFileContextName || 'No file selected'}</span>
+                <ChevronDown className="size-4 text-gray-400" />
+              </div>
+              {activeFileContextName && (
+                <button 
+                  onClick={onClearFileContext}
+                  className="text-gray-400 hover:text-gray-600 transition"
+                >
+                  <X className="size-[18px]" />
+                </button>
+              )}
+
+              {/* File Menu Dropdown (Floating) */}
+              {isFileMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40 bg-black/5" 
+                    onClick={(e) => { e.stopPropagation(); setIsFileMenuOpen(false); }}
+                  ></div>
+                  <div className="absolute bottom-full mb-2 left-4 w-64 bg-white border border-gray-200 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="py-2 relative bg-white">
+                      <div className="px-4 py-1 text-xs font-medium text-gray-500">Session Files</div>
+                      {sessionFiles.length === 0 && (
+                        <div className="px-4 py-2 text-xs text-gray-400">No files in session</div>
+                      )}
+                      {sessionFiles.map(f => (
+                        <button
+                          key={f.id}
+                          onClick={() => {
+                            onSelectFileContext?.(f.id, f.name);
+                            setIsFileMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-[13px] font-medium hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                        >
+                          <FileText className="size-3.5" />
+                          {f.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {/* Inner Input Area */}
-          <div className="bg-white p-4 flex flex-col gap-3 flex-1 mt-1">
+          <div className={`bg-white p-4 flex flex-col gap-3 flex-1 mt-1 ${sessionState !== 'new' && sessionFiles && sessionFiles.length > 0 ? 'rounded-b-[24px]' : 'rounded-[24px]'}`}>
             <textarea 
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -205,72 +282,29 @@ export default function ChatPanel({
               <button className="flex items-center justify-center p-2 rounded-full hover:bg-gray-100 text-gray-600 transition">
                 <Plus className="size-[22px]" strokeWidth={2} />
               </button>
-
-              {/* Inline Agent Tag / Dropdown */}
-              <div className="relative">
-                {selectedAgent ? (
-                  <div 
-                    onClick={() => setIsAgentMenuOpen(!isAgentMenuOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-[#f4f4f5] rounded-full border border-[#e4e4e7] text-[#3f3f46] hover:bg-[#e4e4e7]/50 cursor-pointer transition"
-                  >
-                    <div className="flex items-center justify-center -space-x-1 opacity-80">
-                      <div className="size-[7px] rounded-full border-[1.5px] border-current"></div>
-                      <div className="w-3 h-[1.5px] bg-current"></div>
-                      <div className="size-[7px] rounded-full border-[1.5px] border-current"></div>
-                    </div>
-                    <span className="text-[13px] font-medium tracking-wide">{selectedAgent}</span>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onClearAgent?.();
-                        setIsAgentMenuOpen(false);
-                      }} 
-                      className="text-gray-400 hover:text-gray-700 transition"
-                    >
-                      <X className="size-3.5" strokeWidth={2.5} />
-                    </button>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => setIsAgentMenuOpen(!isAgentMenuOpen)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-400 cursor-pointer transition group"
-                  >
-                    <Plus className="size-3.5" strokeWidth={2.5} />
-                    <span className="text-[13px] font-medium tracking-wide">Agent</span>
+            </div>
+            
+            <div className="flex items-center gap-2 mt-auto pb-1 flex-1 px-2">
+              {activeShortcut && (
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                  <span className="text-xs font-medium text-gray-600 shrink-0">Creating: {activeShortcut.replace('_', ' ')}</span>
+                  {activeShortcut === 'slide' && (
+                    <button className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition whitespace-nowrap">Select Theme</button>
+                  )}
+                  {(activeShortcut === 'social_image' || activeShortcut === 'long_image') && (
+                    <button className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded hover:bg-emerald-100 transition whitespace-nowrap">Select Ratio</button>
+                  )}
+                  <button onClick={() => setActiveShortcut(null)} className="text-gray-400 hover:text-gray-600 ml-1">
+                    <X className="size-3" />
                   </button>
-                )}
-
-                {/* Dropdown Menu */}
-                {isAgentMenuOpen && (
-                  <div className="absolute left-0 bottom-full mb-2 w-32 bg-white border border-gray-200 shadow-lg rounded-xl overflow-hidden z-30 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="py-1">
-                      {agents.map((agent) => (
-                        <button
-                          key={agent}
-                          onClick={() => {
-                            if (onSelectAgent) {
-                              onSelectAgent(agent as 'Slide' | 'Image' | 'Task');
-                            }
-                            setIsAgentMenuOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-[13px] font-medium hover:bg-gray-50 flex items-center gap-2 ${selectedAgent === agent ? 'text-blue-600 bg-blue-50/50' : 'text-gray-700'}`}
-                        >
-                           {agent === 'Slide' && <div className="size-3 border-2 border-current rounded-sm flex items-center justify-center shrink-0"><div className="size-1 bg-current rounded-sm"></div></div>}
-                           {agent === 'Image' && <ImageIcon className="size-3.5 shrink-0" strokeWidth={2} />}
-                           {agent === 'Task' && <div className="size-[5px] bg-current rounded-sm shrink-0"></div>}
-                           {agent}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
             
             <button 
               onClick={handleSend}
               disabled={!inputText.trim()}
-              className={`rounded-full size-10 flex items-center justify-center shadow-sm transition ${
+              className={`rounded-full size-10 shrink-0 flex items-center justify-center shadow-sm transition ${
                 inputText.trim()
                   ? (sessionState === 'new' ? 'bg-gray-900 text-white cursor-pointer hover:bg-gray-800' : 'bg-blue-600 text-white cursor-pointer hover:bg-blue-700')
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -282,7 +316,6 @@ export default function ChatPanel({
         </div>
       </div>
     </div>
-
-    </div>
+  </div>
   );
 }
