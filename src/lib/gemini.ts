@@ -62,7 +62,13 @@ export async function generateSlideDraft(prompt: string) {
  */
 export async function* generateChatResponseStream(messages: {role: string, content: string}[]) {
   if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
-    throw new Error('Please set VITE_GEMINI_API_KEY in .env.local');
+    const mockReply = "I understand! (This is a mock response for the demo). You can instruct me to create slides, images, or drafts by using the quick shortcuts or specific command words.";
+    const words = mockReply.split(' ');
+    for (const word of words) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      yield word + ' ';
+    }
+    return;
   }
 
   // Convert application message format to Gemini SDK format

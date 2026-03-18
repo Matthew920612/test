@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, FileText, ChevronDown, ChevronRight, Upload } from 'lucide-react';
+import { Plus, MessageSquare, FileText, ChevronDown, ChevronRight, Upload, Folder } from 'lucide-react';
 import type { FolderInfo } from '../App';
 
 type WorkspaceSidebarProps = {
@@ -47,25 +47,42 @@ export default function WorkspaceSidebar({
         </div>
       </div>
 
-      {/* Create new / Upload file button */}
-      <div className="px-4 mb-6 shrink-0">
-        <button 
-          onClick={activeTab === 'Sessions' ? onCreateFolder : () => {}}
-          className="w-full border border-gray-200 rounded-lg flex items-center justify-center gap-2 py-2 hover:bg-gray-50 transition-colors"
-        >
-          {activeTab === 'Sessions' ? (
-            <Plus className="size-4 text-gray-700" />
-          ) : (
+      {/* Upload file button for Assets Only */}
+      {activeTab === 'Assets' && (
+        <div className="px-4 mb-6 shrink-0">
+          <button 
+            className="w-full border border-gray-200 rounded-lg flex items-center justify-center gap-2 py-2 hover:bg-gray-50 transition-colors"
+          >
             <Upload className="size-4 text-gray-700" />
-          )}
-          <span className="text-sm font-medium text-gray-800">
-            {activeTab === 'Sessions' ? 'New session' : 'Upload file'}
-          </span>
-        </button>
-      </div>
+            <span className="text-sm font-medium text-gray-800">
+              Upload file
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Item List */}
       <div className="flex-1 flex flex-col gap-1 px-4 overflow-y-auto">
+        
+        {/* Persistent New Session List Item */}
+        {activeTab === 'Sessions' && (
+          <div className="flex flex-col gap-1 mb-2">
+            <div 
+              onClick={onCreateFolder}
+              className={`flex items-center gap-2 p-2 rounded-md transition-colors group cursor-pointer ${
+                activeTabId === 'new_session' ? 'bg-blue-50/80' : 'hover:bg-gray-50'
+              }`}
+            >
+              <div className="opacity-0 pointer-events-none">
+                <ChevronRight className="size-3" />
+              </div>
+              <Plus className={`size-4 ${activeTabId === 'new_session' ? 'text-blue-600' : 'text-gray-500'}`} />
+              <span className={`text-sm font-medium ${activeTabId === 'new_session' ? 'text-blue-900 font-semibold' : 'text-gray-900'}`}>
+                New session
+              </span>
+            </div>
+          </div>
+        )}
         
         {folders.map(folder => (
           <div key={folder.id} className="flex flex-col gap-1 mb-2">
@@ -82,7 +99,11 @@ export default function WorkspaceSidebar({
               <div className={`transition-colors ${folder.children.length > 0 || activeTab === 'Assets' ? 'text-gray-400 group-hover:text-gray-600' : 'opacity-0'}`}>
                 {folder.isOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
               </div>
-              <MessageSquare className={`size-4 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
+              {activeTab === 'Sessions' ? (
+                <MessageSquare className={`size-4 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
+              ) : (
+                <Folder className={`size-4 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
+              )}
               <span className={`text-sm font-medium ${activeTabId === folder.id ? 'text-blue-900 font-semibold' : 'text-gray-900'}`}>
                 {folder.name}
               </span>

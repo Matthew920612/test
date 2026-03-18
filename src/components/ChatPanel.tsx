@@ -128,7 +128,16 @@ export default function ChatPanel({
             {/* Shortcuts */}
             <div className="w-full max-w-3xl flex flex-col gap-3 mt-4 mb-6">
               <span className="text-xs font-medium text-gray-900 ml-1">Shortcuts</span>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <button 
+                  onClick={() => setActiveShortcut('draft')}
+                  className="bg-white border border-[#e4e4e7] p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-200 transition-all text-left flex items-center gap-3 group"
+                >
+                  <div className="text-blue-400 group-hover:scale-110 transition-transform">
+                    <FileText className="size-5" />
+                  </div>
+                  <span className="font-medium text-gray-900 text-[15px]">Create draft</span>
+                </button>
                 <button 
                   onClick={() => setActiveShortcut('slide')}
                   className="bg-white border border-[#e4e4e7] p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-indigo-200 transition-all text-left flex items-center gap-3 group"

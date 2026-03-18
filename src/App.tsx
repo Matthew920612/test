@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PanelLeftOpen } from 'lucide-react';
 import SidebarStrip from './components/SidebarStrip';
 import WorkspaceSidebar from './components/WorkspaceSidebar';
 import ChatPanel from './components/ChatPanel';
@@ -108,9 +109,9 @@ function App() {
         { id: 'c1', title: 'Brain V1.2', type: 'guide' },
         { id: 'c2', title: 'Pitch Deck', type: 'slide' }
       ],
-      activeTabId: 'c1',
-      chatContextFileId: 'c1',
-      sessionState: 'active'
+      activeTabId: 'new_session',
+      chatContextFileId: undefined,
+      sessionState: 'new'
     },
   ]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('home');
@@ -128,16 +129,20 @@ function App() {
   const activeTabId = activeWorkspace.activeTabId;
   const sessionState = activeWorkspace.sessionState;
 
-  let activeFolder = activeWorkspace.folders.find(f => f.id === activeTabId) 
-    || activeWorkspace.assets.find(f => f.id === activeTabId);
+  let activeFolder = undefined;
   
-  if (!activeFolder) {
-    activeFolder = activeWorkspace.folders.find(f => f.children.some(c => c.id === activeTabId))
-      || activeWorkspace.assets.find(f => f.children.some(c => c.id === activeTabId));
-  }
-  
-  if (!activeFolder && activeWorkspace.folders.length > 0) {
-    activeFolder = activeWorkspace.folders[0];
+  if (activeTabId !== 'new_session') {
+    activeFolder = activeWorkspace.folders.find(f => f.id === activeTabId) 
+      || activeWorkspace.assets.find(f => f.id === activeTabId);
+    
+    if (!activeFolder) {
+      activeFolder = activeWorkspace.folders.find(f => f.children.some(c => c.id === activeTabId))
+        || activeWorkspace.assets.find(f => f.children.some(c => c.id === activeTabId));
+    }
+    
+    if (!activeFolder && activeWorkspace.folders.length > 0) {
+      activeFolder = activeWorkspace.folders[0];
+    }
   }
 
   const activeFolderId = activeFolder?.id;
@@ -155,6 +160,9 @@ function App() {
   
   const handleSelectWorkspace = (id: string) => {
     setActiveWorkspaceId(id);
+    setWorkspaces(prev => prev.map(ws => 
+      ws.id === id ? { ...ws, activeTabId: 'new_session', chatContextFileId: undefined, sessionState: 'new' as SessionState } : ws
+    ));
     if (!isSidebarOpen) setIsSidebarOpen(true);
   };
   
@@ -193,29 +201,11 @@ function App() {
   };
 
   const handleCreateFolder = () => {
-    const updatedWorkspaces = workspaces.map(ws => {
-      if (ws.id === activeWorkspaceId) {
-        const newFolder: FolderInfo = {
-          id: `f${Date.now()}`,
-          name: `New Session ${ws.folders.length + 1}`,
-          isOpen: true,
-          messages: [],
-          sessionState: 'new',
-          children: []
-        };
-        return {
-          ...ws,
-          folders: [newFolder, ...ws.folders],
-          sessionState: 'new' as SessionState,
-          messages: [],
-          openTabs: [],
-          activeTabId: newFolder.id,
-          chatContextFileId: undefined
-        };
-      }
-      return ws;
+    updateWorkspace({ 
+      activeTabId: 'new_session',
+      chatContextFileId: undefined,
+      sessionState: 'new'
     });
-    setWorkspaces(updatedWorkspaces);
     if (!isSidebarOpen) setIsSidebarOpen(true);
   };
 
@@ -328,27 +318,28 @@ function App() {
     let targetFolderId = activeFolderId;
     let isAutoGeneratingFolder = false;
 
-    if (!targetFolderId || !activeWorkspace.folders.some(f => f.id === targetFolderId)) {
-        if (activeWorkspace.folders.length > 0) {
-            targetFolderId = activeWorkspace.folders[0].id;
-        } else {
+    if (activeTabId === 'new_session' || !targetFolderId || !activeWorkspace.folders.some(f => f.id === targetFolderId)) {
+        if (activeTabId === 'new_session' || activeWorkspace.folders.length === 0) {
             targetFolderId = `folder_${Date.now()}`;
             isAutoGeneratingFolder = true;
+        } else {
+            targetFolderId = activeWorkspace.folders[0].id;
         }
     }
 
     setWorkspaces(prev => prev.map(ws => {
       if (ws.id === activeWorkspaceId) {
         let updatedFolders = ws.folders;
-        if (isAutoGeneratingFolder && updatedFolders.length === 0) {
-            updatedFolders = [{
+        if (isAutoGeneratingFolder) {
+            const newFolder = {
                 id: targetFolderId!,
                 name: 'Untitled Session',
                 children: [],
                 isOpen: true,
                 messages: [],
-                sessionState: 'new'
-            }];
+                sessionState: 'new' as SessionState
+            };
+            updatedFolders = [newFolder, ...updatedFolders];
         }
 
         let targetFolder = updatedFolders.find(f => f.id === targetFolderId);
@@ -366,14 +357,15 @@ function App() {
                   messages: finalMessages,
                   sessionState: 'active' as SessionState,
                   name: isCurrentlyNew || isAutoGeneratingFolder ? 'Untitled Session' : f.name,
-                  children: isCurrentlyNew || isAutoGeneratingFolder ? [{ id: `draft_${Date.now()}`, name: 'Draft', type: 'draft' as any }] : f.children
+                  children: isCurrentlyNew || isAutoGeneratingFolder ? [] : f.children
                };
             }
             return f;
           });
           
           if (isCurrentlyNew || isAutoGeneratingFolder) {
-            const draftFileId = updatedFolders.find(f => f.id === targetFolder!.id)?.children[0].id;
+            newActiveTabId = targetFolder!.id;
+            const draftFileId = updatedFolders.find(f => f.id === targetFolder!.id)?.children[0]?.id;
             if (draftFileId) {
               newOpenTabs = [{ id: draftFileId, title: 'Draft', type: 'draft' as any }, ...ws.openTabs];
               newActiveTabId = draftFileId;
@@ -399,6 +391,10 @@ function App() {
 
     if (shortcut === 'slide' || lowerContent === 'slide' || lowerContent === '/slide') {
       setTimeout(() => { handleGenerateOutput('slide', targetFolderId!); setAgentState('idle'); }, 100);
+      return;
+    }
+    if (shortcut === 'draft' || lowerContent === 'draft' || lowerContent === '/draft' || lowerContent.includes('draft') || lowerContent.includes('document')) {
+      setTimeout(() => { handleGenerateOutput('draft', targetFolderId!); setAgentState('idle'); }, 100);
       return;
     }
     if (shortcut === 'social_image' || shortcut === 'long_image' || lowerContent === 'image' || lowerContent === '/image') {
@@ -435,7 +431,7 @@ function App() {
                    if (f.id === targetFolderId) {
                      const msgs = [...(f.messages || [])];
                      const lastMsg = msgs[msgs.length - 1];
-                     if (lastMsg.id === assistantMsgId) msgs[msgs.length - 1] = { ...lastMsg, content: accumulatedText };
+                     if (lastMsg && lastMsg.id === assistantMsgId) msgs[msgs.length - 1] = { ...lastMsg, content: accumulatedText };
                      return { ...f, messages: msgs };
                    }
                    return f;
@@ -458,7 +454,7 @@ function App() {
     runAI();
   };
 
-  const handleGenerateOutput = (type: 'slide' | 'image', overrideFolderId?: string) => {
+  const handleGenerateOutput = (type: 'slide' | 'image' | 'draft', overrideFolderId?: string) => {
     const fileId = `file_${Date.now()}`;
     const targetId = overrideFolderId || activeFolderId;
     
@@ -478,13 +474,13 @@ function App() {
       });
     }
     const index = count + 1;
-    const baseTitle = type === 'slide' ? `Pitch Deck ${index}` : `Generated Image ${index}`;
-    const fileName = type === 'slide' ? `${baseTitle}.slide` : `${baseTitle}.png`;
+    const baseTitle = type === 'slide' ? `Pitch Deck ${index}` : type === 'image' ? `Generated Image ${index}` : `Draft ${index}`;
+    const fileName = type === 'slide' ? `${baseTitle}.slide` : type === 'image' ? `${baseTitle}.png` : `${baseTitle}`;
 
     const assistantMsg: Message = {
       id: `m_${Date.now()+1}`,
       role: 'assistant',
-      content: `I've generated the ${type === 'slide' ? 'slides' : 'images'} for you! You can view them in the main panel and they've been saved to your session folder.`
+      content: `I've generated the ${type === 'slide' ? 'slides' : type === 'image' ? 'images' : 'draft'} for you! You can view them in the main panel and they've been saved to your session folder.`
     };
 
     setWorkspaces(prev => prev.map(ws => {
@@ -623,6 +619,21 @@ function App() {
               onManualCollapse={() => updateWorkspace({ chatContextFileId: undefined, activeTabId: activeFolderId })}
             />
           </div>
+
+          {/* Floating Expand Handle */}
+          {!activeWorkspace.chatContextFileId && sessionFiles.length > 0 && (
+            <button 
+              onClick={() => {
+                updateWorkspace({ 
+                  chatContextFileId: activeTabId === 'new_session' || !activeTabId ? sessionFiles[0].id : (activeTabId === activeFolderId ? sessionFiles[0].id : activeTabId)
+                });
+              }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 bg-white border border-[#e4e4e7] border-r-0 rounded-l-xl p-1.5 pl-2 shadow-[-4px_0_12px_rgb(0,0,0,0.06)] hover:bg-gray-50 hover:pr-3 transition-all z-50 text-gray-500 hover:text-gray-900 group flex items-center justify-center cursor-pointer"
+              title="Expand Panel"
+            >
+              <PanelLeftOpen className="size-[18px] rotate-180 opacity-70 group-hover:opacity-100 transition-opacity" />
+            </button>
+          )}
         </>
       )}
 
