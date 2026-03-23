@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FileText, Share2, X, Image as ImageIcon, PanelRightClose, Sparkles } from 'lucide-react';
+import { FileText, Share2, X, Image as ImageIcon, Sparkles, CornerDownRight } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -16,8 +16,8 @@ type MainContentProps = {
   onCloseTab: (id: string) => void;
   sessionFiles?: { id: string; name: string; type: string }[];
   onOpenFile?: (id: string, name: string, type: 'draft'|'slide'|'image'|'guide') => void;
-  onManualCollapse?: () => void;
   
+  // Right pane rendering wrappers
   onSendMessage: (content: string, shortcut?: string | null) => void;
   sessionState: SessionState;
   messages: Message[];
@@ -34,7 +34,6 @@ export default function MainContent({
   onCloseTab,
   sessionFiles,
   onOpenFile,
-  onManualCollapse,
   onSendMessage,
   sessionState,
   messages,
@@ -149,15 +148,6 @@ export default function MainContent({
             })}
           </div>
 
-          {onManualCollapse && (
-            <button 
-              onClick={onManualCollapse}
-              className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-md transition mr-1"
-              title="Collapse panel"
-            >
-              <PanelRightClose className="size-[18px]" strokeWidth={2} />
-            </button>
-          )}
         </div>
       )}
 
@@ -340,77 +330,68 @@ export default function MainContent({
             {/* Session Default Files View */}
             {activeTab?.type === 'folder' && sessionState !== 'new' && (
               <div className="max-w-[800px] w-full flex flex-col items-start mt-8">
+                  <h2 className="text-2xl font-semibold text-gray-900 tracking-tight mb-2">Subtasks</h2>
+                  <p className="text-sm text-gray-500 mb-8">All generation workflows and tasks executing within this context.</p>
                   
-                  {/* Insert Active Tasks Section Here */}
-                  {tasks && tasks.length > 0 && (
-                     <div className="w-full flex flex-col mb-10">
-                        <h2 className="text-xl font-semibold text-gray-900 tracking-tight mb-4 flex items-center gap-2">
-                           <Sparkles className="size-5 text-indigo-500" />
-                           Active Tasks
-                        </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                           {tasks.map(t => (
-                              <div key={t.id} className="bg-white border border-indigo-100/60 rounded-xl p-4 flex flex-col gap-3 shadow-sm relative overflow-hidden group">
-                                 {t.status === 'running' && (
-                                   <div className="absolute top-0 left-0 w-full h-1 bg-indigo-100 overflow-hidden">
-                                      <div className="h-full bg-indigo-500 w-1/2 animate-pulse rounded-r-full"></div>
-                                   </div>
-                                 )}
-                                 <div className="flex justify-between items-start pt-1">
-                                    <span className="font-medium text-[15px] text-gray-900 leading-snug">{t.description}</span>
-                                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                                       t.status === 'running' ? 'bg-indigo-100 text-indigo-700' : 
-                                       t.status === 'done' ? 'bg-emerald-100 text-emerald-700' : 
-                                       'bg-amber-100 text-amber-700'
-                                    }`}>
-                                      {t.status === 'running' ? 'In Progress' : t.status === 'done' ? 'Done' : 'Pending'}
-                                    </span>
-                                 </div>
-                                 {t.status === 'running' && (
-                                    <div className="flex items-center gap-2 mt-1">
-                                       <div className="flex gap-1 items-center">
-                                          <div className="size-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                          <div className="size-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                          <div className="size-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  {(() => {
+                     const sessionTasks = tasks?.filter(t => sessionFiles?.some(f => f.id === t.targetTabId)) || [];
+                     return sessionTasks.length > 0 ? (
+                         <div className="flex flex-col gap-4 w-full mb-10">
+                            {sessionTasks.map(t => {
+                               const relatedFile = sessionFiles?.find(f => f.id === t.targetTabId);
+                               const isClickable = relatedFile && t.status === 'done';
+                               
+                               return (
+                                 <div 
+                                   key={t.id} 
+                                   onClick={() => isClickable ? onOpenFile?.(relatedFile.id, relatedFile.name, relatedFile.type as any) : undefined}
+                                   className={`bg-white border border-indigo-100/60 rounded-xl p-4 flex flex-col gap-3 shadow-sm relative overflow-hidden group transition ${isClickable ? 'cursor-pointer hover:border-indigo-300 hover:shadow-md' : ''}`}
+                                 >
+                                    {t.status === 'running' && (
+                                      <div className="absolute top-0 left-0 w-full h-1 bg-indigo-100 overflow-hidden">
+                                         <div className="h-full bg-indigo-500 w-1/2 animate-pulse rounded-r-full"></div>
+                                      </div>
+                                    )}
+                                    <div className="flex justify-between items-start pt-1">
+                                       <div className="flex flex-col gap-1">
+                                          <span className="font-medium text-[15px] text-gray-900 leading-snug">
+                                             {t.description}
+                                          </span>
+                                          {relatedFile && t.status === 'done' && (
+                                             <span className="text-[13px] text-indigo-500/80 font-medium tracking-wide flex items-center gap-1">
+                                               <CornerDownRight className="size-3" strokeWidth={2.5} />
+                                               {relatedFile.name}
+                                             </span>
+                                          )}
                                        </div>
-                                       <span className="text-[13px] text-gray-500 font-medium tracking-wide">Executing sub-agent workflow...</span>
+                                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                                          t.status === 'running' ? 'bg-indigo-100 text-indigo-700' : 
+                                          t.status === 'done' ? 'bg-emerald-100 text-emerald-700' : 
+                                          'bg-amber-100 text-amber-700'
+                                       }`}>
+                                         {t.status === 'running' ? 'In Progress' : t.status === 'done' ? 'Done' : 'Pending'}
+                                       </span>
                                     </div>
-                                 )}
-                              </div>
-                           ))}
-                        </div>
-                     </div>
-                  )}
-
-                  <h2 className="text-2xl font-semibold text-gray-900 tracking-tight mb-2">Task Files</h2>
-                  <p className="text-sm text-gray-500 mb-8">All generated drafts, images, and slides in your current active task.</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-                    {(sessionFiles || []).map(file => (
-                        <div 
-                          key={file.id}
-                          onClick={() => onOpenFile?.(file.id, file.name, file.type as any)}
-                          className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3 hover:border-indigo-300 hover:shadow-sm cursor-pointer transition group"
-                        >
-                          <div className="size-10 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-indigo-50 shrink-0">
-                              {file.type === 'draft' && <FileText className="size-5 text-gray-400 group-hover:text-indigo-600" />}
-                              {file.type === 'slide' && <div className="size-4 border-2 border-current rounded-sm flex items-center justify-center shrink-0 text-gray-400 group-hover:text-indigo-600"><div className="size-1 bg-current rounded-sm"></div></div>}
-                              {file.type === 'image' && <ImageIcon className="size-5 text-gray-400 group-hover:text-indigo-600" />}
-                              {file.type === 'guide' && <Share2 className="size-5 text-gray-400 group-hover:text-indigo-600" />}
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                              <span className="font-medium text-[14px] text-gray-900 truncate">{file.name}</span>
-                              <span className="text-xs text-gray-500 capitalize">{file.type} Type</span>
-                          </div>
-                        </div>
-                    ))}
-                    
-                    {(!sessionFiles || sessionFiles.length === 0) && (
-                        <div className="col-span-full py-12 text-center text-sm font-medium text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                          No files generated in this task yet.
-                        </div>
-                    )}
-                  </div>
+                                    {t.status === 'running' && (
+                                       <div className="flex items-center gap-2 mt-1">
+                                          <div className="flex gap-1 items-center">
+                                             <div className="size-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                             <div className="size-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                             <div className="size-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                          </div>
+                                          <span className="text-[13px] text-gray-500 font-medium tracking-wide">Executing sub-agent workflow...</span>
+                                       </div>
+                                    )}
+                                 </div>
+                               );
+                            })}
+                         </div>
+                     ) : (
+                         <div className="w-full py-12 text-center text-sm font-medium text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-300 mb-10">
+                           No subtasks generated yet.
+                         </div>
+                     );
+                  })()}
               </div>
             )}
 

@@ -525,7 +525,7 @@ function App() {
     }
     const index = count + 1;
     const baseTitle = type === 'slide' ? `Pitch Deck ${index}` : type === 'image' ? `Generated Image ${index}` : `Draft ${index}`;
-    const fileName = type === 'slide' ? `${baseTitle}.slide` : type === 'image' ? `${baseTitle}.png` : `${baseTitle}`;
+    const fileName = baseTitle;
 
     setWorkspaces(prev => prev.map(ws => {
       if (ws.id === activeWorkspaceId) {
@@ -658,6 +658,7 @@ function App() {
             setActiveTab={setActiveSidebarTab}
             folders={activeSidebarTab === 'Sessions' ? activeWorkspace.folders : activeWorkspace.assets}
             activeTabId={activeTabId}
+            tasks={activeWorkspace?.tasks || []}
             onCreateFolder={handleCreateFolder}
             onToggleFolder={handleToggleFolder}
             onOpenFile={handleOpenFile}
@@ -683,7 +684,6 @@ function App() {
               onCloseTab={handleCloseTab}
               sessionFiles={sessionFiles}
               onOpenFile={(id: string, name: string, type: any) => handleOpenFile(id, name, type)}
-              onManualCollapse={() => {}} // Disabled under split pane
               onSendMessage={handleSendMessage} 
               sessionState={currentSessionState} 
               messages={currentMessages}

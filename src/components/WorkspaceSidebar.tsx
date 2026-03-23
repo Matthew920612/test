@@ -1,11 +1,12 @@
-import { Plus, MessageSquare, FileText, ChevronDown, ChevronRight, Upload, Folder } from 'lucide-react';
-import type { FolderInfo } from '../App';
+import { Plus, MessageSquare, ChevronDown, ChevronRight, Upload, Folder, CornerDownRight, Loader2 } from 'lucide-react';
+import type { FolderInfo, TaskInfo } from '../App';
 
 type WorkspaceSidebarProps = {
   workspaceName?: string;
   activeTab: 'Sessions' | 'Assets';
   setActiveTab: (tab: 'Sessions' | 'Assets') => void;
   folders: FolderInfo[];
+  tasks?: TaskInfo[];
   activeTabId?: string;
   onCreateFolder: () => void;
   onToggleFolder: (id: string) => void;
@@ -17,6 +18,7 @@ export default function WorkspaceSidebar({
   activeTab,
   setActiveTab,
   folders,
+  tasks = [],
   activeTabId,
   onCreateFolder,
   onToggleFolder,
@@ -100,13 +102,16 @@ export default function WorkspaceSidebar({
                 {folder.isOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
               </div>
               {activeTab === 'Sessions' ? (
-                <MessageSquare className={`size-4 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
+                <MessageSquare className={`size-4 shrink-0 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
               ) : (
-                <Folder className={`size-4 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
+                <Folder className={`size-4 shrink-0 ${activeTabId === folder.id ? 'text-blue-600' : 'text-gray-500'}`} />
               )}
-              <span className={`text-sm font-medium ${activeTabId === folder.id ? 'text-blue-900 font-semibold' : 'text-gray-900'}`}>
+              <span className={`text-sm font-medium truncate pr-2 ${activeTabId === folder.id ? 'text-blue-900 font-semibold' : 'text-gray-900'}`}>
                 {folder.name}
               </span>
+              {tasks.some(t => t.status === 'running' && folder.children.some(c => c.id === t.targetTabId)) && (
+                 <Loader2 className="size-3.5 text-indigo-400 animate-spin shrink-0 ml-auto" />
+              )}
             </div>
             
             {/* Sub Items Container */}
@@ -121,12 +126,21 @@ export default function WorkspaceSidebar({
                   <div 
                     key={child.id} 
                     onClick={() => onOpenFile(child.id, child.name, child.type)}
-                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${
+                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${
                       isActive ? 'bg-blue-50/80 text-blue-700' : 'hover:bg-gray-50 text-gray-700'
                     }`}
                   >
-                    <FileText className={`size-4 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${isActive ? 'font-semibold' : ''}`}>{child.name}</span>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                       <CornerDownRight className={`size-3.5 ml-1 shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} strokeWidth={2.5} />
+                       <span className={`text-sm truncate ${isActive ? 'font-semibold' : ''}`}>{child.name}</span>
+                    </div>
+                    {tasks.some(t => t.status === 'running' && t.targetTabId === child.id) && (
+                        <div className="flex gap-0.5 shrink-0 ml-2">
+                           <div className="size-1 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                           <div className="size-1 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                           <div className="size-1 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                    )}
                   </div>
                 );
               })}
