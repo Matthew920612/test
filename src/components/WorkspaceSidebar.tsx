@@ -36,7 +36,7 @@ export default function WorkspaceSidebar({
             onClick={() => setActiveTab('Sessions')}
             className={`flex-1 rounded-full py-1 text-sm font-medium transition-colors ${activeTab === 'Sessions' ? 'bg-white shadow-tab text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
           >
-            Sessions
+            Tasks
           </button>
           <button 
             onClick={() => setActiveTab('Assets')}
@@ -78,7 +78,7 @@ export default function WorkspaceSidebar({
               </div>
               <Plus className={`size-4 ${activeTabId === 'new_session' ? 'text-blue-600' : 'text-gray-500'}`} />
               <span className={`text-sm font-medium ${activeTabId === 'new_session' ? 'text-blue-900 font-semibold' : 'text-gray-900'}`}>
-                New session
+                New task
               </span>
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function WorkspaceSidebar({
         {/* Static Default File Items to show scrolling / structure */}
         {folders.length === 0 && (
           <div className="px-2 py-4 text-sm text-gray-400 text-center">
-            {activeTab === 'Sessions' ? 'No sessions yet. Start a chat or click "New session".' : 'No assets uploaded yet.'}
+            {activeTab === 'Sessions' ? 'No tasks yet. Start a chat or click "New task".' : 'No assets uploaded yet.'}
           </div>
         )}
       </div>

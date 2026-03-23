@@ -1,11 +1,26 @@
 import { useState } from 'react';
-import { PanelLeftOpen } from 'lucide-react';
 import SidebarStrip from './components/SidebarStrip';
 import WorkspaceSidebar from './components/WorkspaceSidebar';
-import ChatPanel from './components/ChatPanel';
 import MainContent from './components/MainContent';
 import WorkspaceCreator from './components/WorkspaceCreator';
 import { generateChatResponseStream } from './lib/gemini';
+
+export type TaskStatus = 'running' | 'pending' | 'done';
+
+export type TaskInfo = {
+  id: string;
+  targetTabId: string;
+  description: string;
+  status: TaskStatus;
+  queuedPrompt?: string;
+};
+
+export type FolderChildren = {
+  id: string; 
+  name: string; 
+  type: 'draft' | 'slide' | 'image' | 'guide';
+  messages?: Message[];
+};
 
 export type FolderInfo = {
   id: string;
@@ -13,7 +28,7 @@ export type FolderInfo = {
   isOpen: boolean;
   messages?: Message[];
   sessionState?: SessionState;
-  children: { id: string; name: string, type: 'draft' | 'slide' | 'image' | 'guide' }[];
+  children: FolderChildren[];
 };
 
 export type WorkspaceInfo = {
@@ -24,6 +39,7 @@ export type WorkspaceInfo = {
   folders: FolderInfo[];
   assets: FolderInfo[];
   messages: Message[];
+  tasks: TaskInfo[];
   openTabs: TabInfo[];
   activeTabId: string;
   chatContextFileId?: string;
@@ -40,6 +56,7 @@ export type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  agentNameOverride?: string;
 };
 
 export type AgentState = 'idle' | 'drafting' | 'complete';
@@ -60,6 +77,7 @@ function App() {
       folders: [],
       assets: [],
       messages: [],
+      tasks: [],
       openTabs: [],
       activeTabId: '',
       chatContextFileId: undefined,
@@ -73,42 +91,17 @@ function App() {
       folders: [
         {
           id: 'f1',
-          name: 'AI Brand Identity Extractor',
+          name: 'Task',
           isOpen: true,
-          children: [
-            { id: 'c1', name: 'Brain V1.2', type: 'guide' },
-            { id: 'c2', name: 'Pitch Deck.slide', type: 'slide' },
-            { id: 'c3', name: 'Assets.png', type: 'image' },
-          ]
+          children: []
         }
       ],
-      assets: [
-        {
-          id: 'a1',
-          name: 'Logos & Branding',
-          isOpen: true,
-          children: [
-            { id: 'img1', name: 'Primary_Logo.png', type: 'image' },
-            { id: 'img2', name: 'Brand_Guidelines', type: 'guide' },
-          ]
-        },
-        {
-          id: 'a2',
-          name: 'Marketing Material',
-          isOpen: false,
-          children: [
-            { id: 'img3', name: 'Promo_Banner.png', type: 'image' },
-          ]
-        }
-      ],
+      assets: [],
       messages: [
-        { id: 'm1', role: 'user', content: "Let's work on the brand identity!" },
-        { id: 'm2', role: 'assistant', content: "Sounds great. I've created the initial draft and slides." }
+        { id: 'm1', role: 'assistant', content: 'Welcome to Dokie! I am your AI Brand identity extractor and presentation builder. How can I help you today?' }
       ],
-      openTabs: [
-        { id: 'c1', title: 'Brain V1.2', type: 'guide' },
-        { id: 'c2', title: 'Pitch Deck', type: 'slide' }
-      ],
+      tasks: [],
+      openTabs: [],
       activeTabId: 'new_session',
       chatContextFileId: undefined,
       sessionState: 'new'
@@ -148,8 +141,17 @@ function App() {
   const activeFolderId = activeFolder?.id;
   const sessionFiles = activeFolder ? activeFolder.children : [];
 
-  const currentMessages = activeFolder?.messages || activeWorkspace.messages;
-  const currentSessionState = activeFolder?.sessionState || (activeFolder && activeFolder.children.length > 0 ? 'active' : activeWorkspace.sessionState);
+  const activeTabType = activeWorkspace.openTabs.find(t => t.id === activeTabId)?.type;
+  
+  const currentMessages = activeTabId === 'new_session' ? [] : (
+     activeTabType === 'draft' || activeTabType === 'slide' || activeTabType === 'image' 
+      ? (activeFolder?.children.find(c => c.id === activeTabId)?.messages || [])
+      : (activeFolder?.messages || activeWorkspace.messages)
+  );
+  
+  const currentSessionState = (activeTabId === 'new_session' || !activeTabId)
+    ? 'new'
+    : (activeFolder?.sessionState || (activeFolder && activeFolder.children.length > 0 ? 'active' : activeWorkspace.sessionState));
 
   // Helper macro to update active workspace state easily
   const updateWorkspace = (updates: Partial<WorkspaceInfo>) => {
@@ -189,6 +191,7 @@ function App() {
       folders: initialFolders,
       assets: [],
       messages: [],
+      tasks: [],
       openTabs: [],
       activeTabId: '',
       sessionState: 'new'
@@ -336,8 +339,7 @@ function App() {
                 name: 'Untitled Session',
                 children: [],
                 isOpen: true,
-                messages: [],
-                sessionState: 'new' as SessionState
+                messages: []
             };
             updatedFolders = [newFolder, ...updatedFolders];
         }
@@ -355,8 +357,7 @@ function App() {
                return {
                   ...f,
                   messages: finalMessages,
-                  sessionState: 'active' as SessionState,
-                  name: isCurrentlyNew || isAutoGeneratingFolder ? 'Untitled Session' : f.name,
+                  name: isCurrentlyNew || isAutoGeneratingFolder ? 'Untitled Task' : f.name,
                   children: isCurrentlyNew || isAutoGeneratingFolder ? [] : f.children
                };
             }
@@ -378,7 +379,6 @@ function App() {
           ...ws,
           folders: updatedFolders,
           messages: finalMessages, // optionally keep workspace fallback synced
-          sessionState: 'active' as SessionState,
           openTabs: newOpenTabs,
           activeTabId: newActiveTabId
         };
@@ -389,17 +389,49 @@ function App() {
     if (autoCollapsedSidebar) setIsSidebarOpen(false);
     if (isCurrentlyNew || isAutoGeneratingFolder) setAgentState('drafting');
 
-    if (shortcut === 'slide' || lowerContent === 'slide' || lowerContent === '/slide') {
+    if (shortcut === 'slide' || lowerContent === '/slide' || lowerContent.includes('slide') || lowerContent.includes('ppt') || lowerContent.includes('幻灯片')) {
       setTimeout(() => { handleGenerateOutput('slide', targetFolderId!); setAgentState('idle'); }, 100);
       return;
     }
-    if (shortcut === 'draft' || lowerContent === 'draft' || lowerContent === '/draft' || lowerContent.includes('draft') || lowerContent.includes('document')) {
+    if (shortcut === 'draft' || lowerContent === '/draft' || lowerContent.includes('draft') || lowerContent.includes('document')) {
       setTimeout(() => { handleGenerateOutput('draft', targetFolderId!); setAgentState('idle'); }, 100);
       return;
     }
-    if (shortcut === 'social_image' || shortcut === 'long_image' || lowerContent === 'image' || lowerContent === '/image') {
+    if (shortcut === 'social_image' || shortcut === 'long_image' || lowerContent === '/image' || lowerContent.includes('image') || lowerContent.includes('poster') || lowerContent.includes('海报')) {
       setTimeout(() => { handleGenerateOutput('image', targetFolderId!); setAgentState('idle'); }, 100);
       return;
+    }
+
+    // Global task dispatch interceptor for Main Agent
+    if (activeTabId === activeFolderId && activeWorkspace.tasks.some(t => t.status === 'running')) {
+       const runningTask = activeWorkspace.tasks.find(t => t.status === 'running');
+       if (runningTask) {
+          const newTask: TaskInfo = {
+            id: `task_${Date.now()+1}`,
+            targetTabId: runningTask.targetTabId,
+            description: `Refining document...`,
+            status: 'pending',
+            queuedPrompt: newUserMsg.content
+          };
+          
+          const forwardMsg: Message = {
+            id: `m_f_${Date.now()+2}`,
+            role: 'assistant',
+            content: `Understood! I've queued your instructions. They will be automatically forwarded to the Sub-Agent handling that file as soon as its current task completes.`
+          };
+          
+          setWorkspaces(prev => prev.map(ws => {
+            if (ws.id === activeWorkspaceId) {
+               return {
+                 ...ws,
+                 tasks: [...ws.tasks, newTask],
+                 folders: ws.folders.map(f => f.id === activeFolderId ? { ...f, messages: [...(f.messages || []), newUserMsg, forwardMsg] } : f)
+               };
+            }
+            return ws;
+          }));
+          return;
+       }
     }
 
     // Run real AI chat request
@@ -454,61 +486,131 @@ function App() {
     runAI();
   };
 
-  const handleGenerateOutput = (type: 'slide' | 'image' | 'draft', overrideFolderId?: string) => {
+  // Helper for secondary queue execution
+  const executePendingTask = (fileId: string, folderId: string) => {
+      setWorkspaces(prev => prev.map(ws => {
+        if (ws.id === activeWorkspaceId) {
+          const finishedMsg: Message = {
+            id: `m_${Date.now()}`,
+            role: 'assistant',
+            content: `Your queued modifications have been successfully processed!`
+          };
+          
+          let newFolders = ws.folders.map(f => {
+            if (f.id === folderId) {
+               return { 
+                  ...f, 
+                  children: f.children.map(c => 
+                    c.id === fileId ? { ...c, messages: [...(c.messages || []), finishedMsg] } : c
+                  )
+               };
+            }
+            return f;
+          });
+          
+          let updatedTasks = ws.tasks.map(t => t.targetTabId === fileId && t.status === 'running' ? { ...t, status: 'done' as TaskStatus } : t);
+          return { ...ws, folders: newFolders, tasks: updatedTasks };
+        }
+        return ws;
+      }));
+  };
+
+  const handleGenerateOutput = (type: 'slide' | 'image' | 'draft', overrideFolderId?: string, userPrompt?: string) => {
     const fileId = `file_${Date.now()}`;
     const targetId = overrideFolderId || activeFolderId;
     
-    // Count existing files of this type in the active workspace
     const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
     let count = 0;
     if (activeWs) {
-      activeWs.folders.forEach(f => {
-        f.children.forEach(c => {
-          if (c.type === type) count++;
-        });
-      });
-      activeWs.assets.forEach(f => {
-        f.children.forEach(c => {
-          if (c.type === type) count++;
-        });
-      });
+      activeWs.folders.forEach(f => { f.children.forEach(c => { if (c.type === type) count++; }); });
+      activeWs.assets.forEach(f => { f.children.forEach(c => { if (c.type === type) count++; }); });
     }
     const index = count + 1;
     const baseTitle = type === 'slide' ? `Pitch Deck ${index}` : type === 'image' ? `Generated Image ${index}` : `Draft ${index}`;
     const fileName = type === 'slide' ? `${baseTitle}.slide` : type === 'image' ? `${baseTitle}.png` : `${baseTitle}`;
 
-    const assistantMsg: Message = {
-      id: `m_${Date.now()+1}`,
-      role: 'assistant',
-      content: `I've generated the ${type === 'slide' ? 'slides' : type === 'image' ? 'images' : 'draft'} for you! You can view them in the main panel and they've been saved to your session folder.`
-    };
-
     setWorkspaces(prev => prev.map(ws => {
       if (ws.id === activeWorkspaceId) {
         let newFolders = ws.folders.map(f => {
           if (f.id === targetId) {
+             const forwardedMsg: Message = {
+                id: `m_${Date.now()}_fwd`,
+                role: 'assistant',
+                agentNameOverride: 'Brain',
+                content: `Forwarding user request to ${type} agent.\nContext: ${userPrompt || `Create a new ${type}`}`
+             };
+             const ackMsg: Message = {
+                id: `m_${Date.now()+1}_ack`,
+                role: 'assistant',
+                content: `Task received. I'm now drafting the initial ${type}. This process takes about 2 minutes...`
+             };
+
              return { 
                 ...f, 
-                children: [...f.children, { id: fileId, name: fileName, type }],
-                messages: [...(f.messages || []), assistantMsg]
+                children: [...f.children, { id: fileId, name: fileName, type, messages: [forwardedMsg, ackMsg] }]
              };
           }
           return f;
         });
 
+        const newTask: TaskInfo = {
+          id: `task_${Date.now()}`,
+          targetTabId: fileId,
+          description: `Generating ${type}...`,
+          status: 'running'
+        };
+
+        const hasFolderTab = ws.openTabs.some(t => t.id === targetId);
+        const newOpenTabs = hasFolderTab ? ws.openTabs : [{ id: targetId as string, title: 'Main Agent', type: 'folder' as any }, ...ws.openTabs];
+
         return { 
           ...ws, 
           folders: newFolders,
-          openTabs: [...ws.openTabs, { id: fileId, title: baseTitle, type }],
+          openTabs: [...newOpenTabs, { id: fileId, title: baseTitle, type: type as any }],
           activeTabId: fileId,
-          chatContextFileId: fileId,
-          messages: [...ws.messages, assistantMsg]
+          tasks: [...ws.tasks, newTask]
         };
       }
       return ws;
     }));
 
-    setAgentState('idle'); // clear suggested actions
+    setAgentState('idle');
+
+    // Simulate 2-minute async delay hooks
+    setTimeout(() => {
+      setWorkspaces(prev => prev.map(ws => {
+        if (ws.id === activeWorkspaceId) {
+          const completedMsg: Message = {
+            id: `m_${Date.now()}`,
+            role: 'assistant',
+            content: `I've finished generating the ${type}! The canvas is ready.`
+          };
+          
+          let newFolders = ws.folders.map(f => {
+            if (f.id === targetId) {
+               return { 
+                  ...f, 
+                  children: f.children.map(c => 
+                    c.id === fileId ? { ...c, messages: [...(c.messages || []), completedMsg] } : c
+                  )
+               };
+            }
+            return f;
+          });
+          
+          let updatedTasks = ws.tasks.map(t => t.targetTabId === fileId && t.status === 'running' ? { ...t, status: 'done' as TaskStatus } : t);
+          
+          const nextPending = updatedTasks.find(t => t.targetTabId === fileId && t.status === 'pending');
+          if (nextPending) {
+             updatedTasks = updatedTasks.map(t => t.id === nextPending.id ? { ...t, status: 'running' as TaskStatus } : t);
+             setTimeout(() => executePendingTask(fileId, targetId!), 10000); 
+          }
+
+          return { ...ws, folders: newFolders, tasks: updatedTasks };
+        }
+        return ws;
+      }));
+    }, 120000); // 2 minutes strict mock
   };
 
   const handleCloseTab = (tabId: string) => {
@@ -565,7 +667,7 @@ function App() {
         </div>
       </div>
 
-      {/* 2. Middle and Right Panels */}
+      {/* 2. Main Workspace Unified Area */}
       {isCreatingWorkspace ? (
         <div className="flex-1 min-w-0 h-full flex flex-col relative transition-all duration-300 ml-2">
            <WorkspaceCreator 
@@ -574,69 +676,25 @@ function App() {
            />
         </div>
       ) : (
-        <>
-          {/* 2. Middle Chat Panel */}
-          <div 
-            className={`bg-white/80 backdrop-blur-md rounded-[16px] h-full overflow-hidden flex-shrink-0 shadow-[0px_1px_3px_0px_rgba(25,33,61,0.1)] border border-[#e4e4e7] flex flex-col relative transition-all duration-300 ease-in-out ${
-              !activeWorkspace.chatContextFileId ? 'flex-1' : 'w-[380px]'
-            }`}
-          >
-            <ChatPanel 
+        <div className="flex-1 bg-white/80 backdrop-blur-md rounded-[16px] h-full overflow-hidden flex-shrink-0 shadow-[0px_1px_3px_0px_rgba(25,33,61,0.1)] border border-[#e4e4e7] flex flex-col relative transition-all duration-300 ease-in-out ml-2">
+            <MainContent 
+              onSelectAgent={setSelectedAgent as any}
+              openTabs={openTabs}
+              activeTabId={activeTabId}
+              onSetActiveTab={handleSyncTabSelection}
+              onCloseTab={handleCloseTab}
+              sessionFiles={sessionFiles}
+              onOpenFile={(id: string, name: string, type: any) => handleOpenFile(id, name, type)}
+              onManualCollapse={() => {}} // Disabled under split pane
               onSendMessage={handleSendMessage} 
               sessionState={currentSessionState} 
               messages={currentMessages}
               agentState={agentState}
-              onGenerateOutput={handleGenerateOutput}
-              activeFileContextName={
-                activeWorkspace.chatContextFileId === activeFolderId 
-                  ? undefined 
-                  : openTabs.find(t => t.id === activeWorkspace.chatContextFileId)?.title
-              }
-              onClearFileContext={() => updateWorkspace({ chatContextFileId: undefined })}
-              sessionFiles={sessionFiles}
-              onSelectFileContext={(id) => handleSyncTabSelection(id)}
+              onGenerateOutput={handleGenerateOutput as any}
+              tasks={activeWorkspace.tasks}
             />
-          </div>
-
-          {/* 3. Right Main Content Panel */}
-          <div 
-            className={`bg-[white] rounded-[16px] flex flex-col relative overflow-hidden transition-all duration-300 ease-in-out ${
-              !activeWorkspace.chatContextFileId ? 'w-0 opacity-0 min-w-0 border-0 ml-0' : 'flex-1 min-w-[400px] opacity-100 ml-4 border border-[#e4e4e7]'
-            }`}
-          >
-            <MainContent 
-              onSelectAgent={setSelectedAgent}
-              openTabs={
-                sessionFiles.length > 0 && activeFolderId
-                  ? [{ id: activeFolderId, title: 'Session Files', type: 'folder' } as any, ...openTabs.filter(t => sessionFiles.some(f => f.id === t.id))]
-                  : openTabs.filter(t => sessionFiles.some(f => f.id === t.id))
-              }
-              activeTabId={activeWorkspace.chatContextFileId || ''}
-              onSetActiveTab={handleSyncTabSelection}
-              onCloseTab={handleCloseTab}
-              sessionFiles={sessionFiles}
-              onOpenFile={(id, name, type) => handleOpenFile(id, name, type)}
-              onManualCollapse={() => updateWorkspace({ chatContextFileId: undefined, activeTabId: activeFolderId })}
-            />
-          </div>
-
-          {/* Floating Expand Handle */}
-          {!activeWorkspace.chatContextFileId && sessionFiles.length > 0 && (
-            <button 
-              onClick={() => {
-                updateWorkspace({ 
-                  chatContextFileId: activeTabId === 'new_session' || !activeTabId ? sessionFiles[0].id : (activeTabId === activeFolderId ? sessionFiles[0].id : activeTabId)
-                });
-              }}
-              className="absolute right-0 top-1/2 -translate-y-1/2 bg-white border border-[#e4e4e7] border-r-0 rounded-l-xl p-1.5 pl-2 shadow-[-4px_0_12px_rgb(0,0,0,0.06)] hover:bg-gray-50 hover:pr-3 transition-all z-50 text-gray-500 hover:text-gray-900 group flex items-center justify-center cursor-pointer"
-              title="Expand Panel"
-            >
-              <PanelLeftOpen className="size-[18px] rotate-180 opacity-70 group-hover:opacity-100 transition-opacity" />
-            </button>
-          )}
-        </>
+        </div>
       )}
-
     </div>
   );
 }
