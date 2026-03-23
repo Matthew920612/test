@@ -296,7 +296,6 @@ function App() {
     const isCurrentlyNew = currentSessionState === 'new';
     
     let newActiveTabId = activeTabId;
-    let autoCollapsedSidebar = false;
 
     // Command shortcuts interception before AI runs
     const lowerContent = content.toLowerCase();
@@ -370,7 +369,6 @@ function App() {
             if (draftFileId) {
               newOpenTabs = [{ id: draftFileId, title: 'Draft', type: 'draft' as any }, ...ws.openTabs];
               newActiveTabId = draftFileId;
-              autoCollapsedSidebar = true;
             }
           }
         }
@@ -386,7 +384,7 @@ function App() {
       return ws;
     }));
 
-    if (autoCollapsedSidebar) setIsSidebarOpen(false);
+    setIsSidebarOpen(false);
     if (isCurrentlyNew || isAutoGeneratingFolder) setAgentState('drafting');
 
     if (shortcut === 'slide' || lowerContent === '/slide' || lowerContent.includes('slide') || lowerContent.includes('ppt') || lowerContent.includes('幻灯片')) {
